@@ -46,33 +46,34 @@ export default function App() {
     <div style={{
       fontFamily: "'Cinzel',serif",
       background: '#030008',
-      minHeight: '100vh',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      position: 'relative', overflow: 'hidden',
+      width: '100vw',
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative',
+      overflow: 'hidden',
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cinzel+Decorative:wght@700&display=swap');
         *{box-sizing:border-box} button:focus{outline:none}
+        html, body, #root { width: 100%; height: 100%; }
       `}</style>
 
-      <div style={{ position: 'relative', width: '100%', maxWidth: 800 }}>
-        {phase !== 'menu' && (
-          <HUD muted={muted} onToggleMute={toggleMute} />
-        )}
-        <div
-          ref={containerRef}
-          style={{
-            width: '100%',
-            aspectRatio: '8 / 5',
-            background: '#060011',
-            touchAction: 'none',
-          }}
-        />
-        {phase === 'menu' && <Menu onStart={start} />}
-        {(phase === 'dead' || phase === 'victory') && (
-          <EndScreen phase={phase} hud={hud} onRestart={start} onMenu={goMenu} />
-        )}
-      </div>
+      {phase !== 'menu' && <HUD muted={muted} onToggleMute={toggleMute} />}
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1,
+          width: '100%',
+          background: '#060011',
+          touchAction: 'none',
+          minHeight: 0,
+        }}
+      />
+      {phase === 'menu' && <Menu onStart={start} />}
+      {(phase === 'dead' || phase === 'victory') && (
+        <EndScreen phase={phase} hud={hud} onRestart={start} onMenu={goMenu} />
+      )}
     </div>
   );
 }
