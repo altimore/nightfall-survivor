@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { W, H, GOAL_TIME } from '../config.js';
+import { GOAL_TIME } from '../config.js';
 import { Player, Enemy, Projectile } from '../entities.js';
 import { initAudio, playSfx, startMusic, stopMusic, setMuted } from '../audio.js';
 import { bus } from '../bus.js';
@@ -7,13 +7,16 @@ import { bus } from '../bus.js';
 export default class GameScene extends Phaser.Scene {
   constructor() { super({ key: 'GameScene' }); }
 
+  get W() { return this.scale.width; }
+  get H() { return this.scale.height; }
+
   create() {
     this.cameras.main.setBackgroundColor('#060011');
 
     this.bgGfx = this.add.graphics().setDepth(-10);
     this.joyGfx = this.add.graphics().setDepth(50);
 
-    this.player = new Player(this, W / 2, H / 2);
+    this.player = new Player(this, this.W / 2, this.H / 2);
     this.enemies = [];
     this.projectiles = [];
     this.elapsed = 0;
@@ -78,9 +81,9 @@ export default class GameScene extends Phaser.Scene {
 
   spawnEnemy(typeName) {
     const angle = Math.random() * Math.PI * 2;
-    const dist = Math.max(W, H) * 0.58;
-    const x = W / 2 + Math.cos(angle) * dist;
-    const y = H / 2 + Math.sin(angle) * dist;
+    const dist = Math.max(this.W, this.H) * 0.58;
+    const x = this.W / 2 + Math.cos(angle) * dist;
+    const y = this.H / 2 + Math.sin(angle) * dist;
     const tier = Math.floor(this.elapsed / 60);
     const hpMul = 1 + tier * 0.3;
     const dmgMul = 1 + tier * 0.1;
@@ -116,8 +119,8 @@ export default class GameScene extends Phaser.Scene {
     if (ml > 1) { mx /= ml; my /= ml; }
     p.x += mx * p.speed * dt;
     p.y += my * p.speed * dt;
-    p.x = Math.max(15, Math.min(W - 15, p.x));
-    p.y = Math.max(15, Math.min(H - 15, p.y));
+    p.x = Math.max(15, Math.min(this.W - 15, p.x));
+    p.y = Math.max(15, Math.min(this.H - 15, p.y));
     p.iframes = Math.max(0, p.iframes - dt);
 
     // ── Spawn
@@ -167,7 +170,7 @@ export default class GameScene extends Phaser.Scene {
       proj.x += proj.dx * dt;
       proj.y += proj.dy * dt;
       proj.life -= dt;
-      if (proj.life <= 0 || proj.x < -60 || proj.x > W + 60 || proj.y < -60 || proj.y > H + 60) {
+      if (proj.life <= 0 || proj.x < -60 || proj.x > this.W + 60 || proj.y < -60 || proj.y > this.H + 60) {
         proj.alive = false;
         continue;
       }
@@ -227,8 +230,8 @@ export default class GameScene extends Phaser.Scene {
     const ox = (p.x * 0.55 % 80 + 80) % 80;
     const oy = (p.y * 0.55 % 70 + 70) % 70;
     g.lineStyle(1, 0x3c005f, 0.18);
-    for (let x = -ox - 80; x < W + 80; x += 80) {
-      for (let y = -oy - 70; y < H + 70; y += 70) {
+    for (let x = -ox - 80; x < this.W + 80; x += 80) {
+      for (let y = -oy - 70; y < this.H + 70; y += 70) {
         g.beginPath();
         for (let i = 0; i < 6; i++) {
           const a = Math.PI / 3 * i - Math.PI / 6;
@@ -247,8 +250,8 @@ export default class GameScene extends Phaser.Scene {
     const j = this.joystick;
     if (!j.active) {
       g.lineStyle(1.5, 0x9d4edd, 0.07);
-      g.strokeCircle(90, H - 90, 55);
-      g.strokeCircle(90, H - 90, 28);
+      g.strokeCircle(90, this.H - 90, 55);
+      g.strokeCircle(90, this.H - 90, 28);
       return;
     }
     g.lineStyle(2, 0xc77dff, 0.28);
