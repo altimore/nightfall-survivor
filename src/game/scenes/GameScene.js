@@ -941,6 +941,7 @@ export default class GameScene extends Phaser.Scene {
             this.runGold += Math.ceil(8 * (p.metaGoldMul || 1));
             this.fxNova(e.x, e.y, 50);
             this.shake(0.006, 100);
+            this.fxBanner('★ ÉLITE VAINCU ★', '#ffd966', 24);
           } else {
             // Normal enemies roll their loot table
             this.rollDrops(e.type, e.x, e.y, 1.0);
@@ -2432,6 +2433,7 @@ export default class GameScene extends Phaser.Scene {
       this.fxNova(p.x, p.y, 80);
       this.shake(0.008, 220);
       playSfx('victory');
+      this.fxBanner('✦ ÉVOLUTION ✦', '#ffd966', 32);
     } else {
       p.skills[id] = (p.skills[id] || 0) + 1;
       if (id === 'heart') {
@@ -2932,6 +2934,29 @@ export default class GameScene extends Phaser.Scene {
 
   shake(intensity = 0.004, durationMs = 120) {
     this.cameras.main.shake(durationMs, intensity);
+  }
+
+  // Big celebratory banner shown at the player's position. Used for evolutions, elite kills, etc.
+  fxBanner(text, color = '#ffd966', size = 28) {
+    const p = this.players?.find(pl => !pl.dead) || this.players?.[0];
+    if (!p) return;
+    const t = this.add.text(p.x, p.y - 40, text, {
+      fontFamily: "'Cinzel Decorative', serif",
+      fontSize: `${size}px`,
+      color,
+      stroke: '#1a0030',
+      strokeThickness: 4,
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(45);
+    this.tweens.add({
+      targets: t,
+      y: p.y - 100,
+      alpha: 0,
+      scale: 1.5,
+      duration: 1400,
+      ease: 'Cubic.out',
+      onComplete: () => t.destroy(),
+    });
   }
 
   fxDamage(x, y, dmg, isCrit = false) {
