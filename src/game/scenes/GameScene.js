@@ -868,10 +868,15 @@ export default class GameScene extends Phaser.Scene {
         if (this.elapsed >= 60) types.push('skeleton');
         if (this.elapsed >= 75) types.push('slime');
         if (this.elapsed >= 90) types.push('ghost');
+        if (this.elapsed >= 100) types.push('wolf');
         if (this.elapsed >= 120) types.push('knight');
         if (this.elapsed >= 130) types.push('wraith');
+        if (this.elapsed >= 135) types.push('demon');
         if (this.elapsed >= 150) types.push('witch');
+        if (this.elapsed >= 155) types.push('druid');
         if (this.elapsed >= 165) types.push('vampire');
+        if (this.elapsed >= 180) types.push('gargoyle');
+        if (this.elapsed >= 200) types.push('elemental');
         // Biome bias : 60% chance to favor unlocked biome enemies
         const favored = (this.biome?.favored || []).filter(t => types.includes(t));
         const pool = (favored.length > 0 && Math.random() < 0.6) ? favored : types;
@@ -1166,12 +1171,14 @@ export default class GameScene extends Phaser.Scene {
             }
           }
           if (e.type === 'boss') {
-            this.shake(0.012, 280);
-            this.hitstop = 0.08;
+            this.shake(0.018, 380);
+            this.hitstop = 0.35; // longer dramatic freeze
             this.bossSeen.delete(e);
             this.bossKills = (this.bossKills || 0) + 1;
             // Boss death drops a "treasure chest" — multiple loot items spread out
             this.dropBossChest(e.x, e.y);
+            this.fxBanner('☠ BOSS VAINCU ☠', '#ff4400', 32);
+            playSfx('victory');
           } else if (e.elite) {
             // Elite enemies always drop a premium item + extra XP burst
             this.rollDrops(e.type, e.x, e.y, 3.0);
@@ -1381,9 +1388,11 @@ export default class GameScene extends Phaser.Scene {
     const l = Math.hypot(dx, dy);
     if (l < 0.05) return;
     p.dashDir = { x: dx / l, y: dy / l };
-    p.dashDur = 0.15;
+    p.dashDur = 0.18;
     p.dashCD = 2;
-    if (slv(p, 'boots') >= 3) p.iframes = Math.max(p.iframes, 0.18);
+    // Base i-frames cover the entire dash duration (0.18s). Boots 3 extends to 0.32s.
+    p.iframes = Math.max(p.iframes, slv(p, 'boots') >= 3 ? 0.32 : 0.18);
+    playSfx('uimove');
   }
 
   fxDeath(x, y, col) {

@@ -433,6 +433,11 @@ export class Enemy {
       case 'slime':    drawSlime(g, this); break;
       case 'wraith':   drawWraith(g, this); break;
       case 'vampire':  drawVampireMinor(g, this); break;
+      case 'wolf':     drawWolf(g, this); break;
+      case 'demon':    drawDemon(g, this); break;
+      case 'gargoyle': drawGargoyle(g, this); break;
+      case 'druid':    drawDruid(g, this); break;
+      case 'elemental':drawElemental(g, this); break;
       case 'boss':     drawBoss(g, this); break;
       default:
         g.fillStyle(this.col, 1);
@@ -772,6 +777,143 @@ function drawVampireMinor(g, e) {
   g.fillStyle(0xffffff, 1);
   g.fillTriangle(-s * 0.18, s * 0.05, -s * 0.08, s * 0.05, -s * 0.13, s * 0.25);
   g.fillTriangle(s * 0.18, s * 0.05, s * 0.08, s * 0.05, s * 0.13, s * 0.25);
+}
+
+function drawWolf(g, e) {
+  const s = e.size;
+  // body
+  g.fillStyle(0x000000, 0.4); g.fillEllipse(0, s + 2, s * 1.6, s * 0.4);
+  g.fillStyle(e.col, 1);
+  g.fillEllipse(0, 2, s * 1.6, s * 1.0);
+  // head
+  g.fillStyle(0x2a2a30, 1);
+  g.fillEllipse(s * 0.6, -s * 0.2, s * 0.7, s * 0.55);
+  // muzzle
+  g.fillStyle(0x1a1a20, 1);
+  g.fillTriangle(s * 0.9, -s * 0.3, s * 1.4, -s * 0.1, s * 0.9, s * 0.05);
+  // ears
+  g.fillStyle(0x1a1a20, 1);
+  g.fillTriangle(s * 0.45, -s * 0.4, s * 0.55, -s * 0.7, s * 0.6, -s * 0.4);
+  g.fillTriangle(s * 0.7, -s * 0.4, s * 0.8, -s * 0.7, s * 0.85, -s * 0.4);
+  // eyes
+  g.fillStyle(e.eyeCol ?? 0xffaa00, 1);
+  g.fillCircle(s * 0.7, -s * 0.25, 1.5);
+  // legs
+  g.fillStyle(0x2a2a30, 1);
+  g.fillRect(-s * 0.4, s * 0.5, 2.5, s * 0.6);
+  g.fillRect(s * 0.1, s * 0.5, 2.5, s * 0.6);
+  // tail
+  g.lineStyle(3, 0x2a2a30, 1);
+  g.beginPath(); g.moveTo(-s * 0.6, 0); g.lineTo(-s * 1.2, -s * 0.4); g.strokePath();
+}
+
+function drawDemon(g, e) {
+  const s = e.size;
+  g.fillStyle(0x000000, 0.4); g.fillEllipse(0, s + 2, s * 1.4, s * 0.4);
+  // body
+  g.fillStyle(e.col, 1);
+  g.fillCircle(0, 0, s);
+  // head darker
+  g.fillStyle(0x4a0a0a, 1);
+  g.fillCircle(0, -s * 0.3, s * 0.7);
+  // horns
+  g.fillStyle(0x2a0a0a, 1);
+  g.fillTriangle(-s * 0.6, -s * 0.6, -s * 0.4, -s * 1.1, -s * 0.3, -s * 0.6);
+  g.fillTriangle(s * 0.6, -s * 0.6, s * 0.4, -s * 1.1, s * 0.3, -s * 0.6);
+  // eyes glowing
+  g.fillStyle(e.eyeCol ?? 0xffff00, 1);
+  g.fillCircle(-s * 0.25, -s * 0.3, 2);
+  g.fillCircle(s * 0.25, -s * 0.3, 2);
+  // mouth fangs
+  g.fillStyle(0x000000, 1);
+  g.fillRect(-s * 0.3, -s * 0.05, s * 0.6, 2);
+  g.fillStyle(0xffe0c0, 1);
+  g.fillTriangle(-s * 0.2, 0, -s * 0.1, 0, -s * 0.15, s * 0.15);
+  g.fillTriangle(s * 0.2, 0, s * 0.1, 0, s * 0.15, s * 0.15);
+  // wings
+  g.fillStyle(0x2a0a0a, 0.85);
+  g.fillTriangle(-s, 0, -s * 1.6, -s * 0.2, -s * 1.1, s * 0.4);
+  g.fillTriangle(s, 0, s * 1.6, -s * 0.2, s * 1.1, s * 0.4);
+}
+
+function drawGargoyle(g, e) {
+  const s = e.size;
+  g.fillStyle(0x000000, 0.5); g.fillEllipse(0, s + 4, s * 1.7, s * 0.4);
+  // stone body
+  g.fillStyle(e.col, 1);
+  g.fillRoundedRect(-s, -s * 0.5, s * 2, s * 1.5, s * 0.3);
+  g.fillStyle(0x4a4a55, 1);
+  g.fillRoundedRect(-s * 0.85, -s * 0.4, s * 1.7, s * 1.3, s * 0.25);
+  // crack lines
+  g.lineStyle(1, 0x222228, 0.7);
+  g.beginPath(); g.moveTo(-s * 0.4, -s * 0.3); g.lineTo(-s * 0.2, s * 0.4); g.strokePath();
+  g.beginPath(); g.moveTo(s * 0.5, -s * 0.2); g.lineTo(s * 0.6, s * 0.5); g.strokePath();
+  // head
+  g.fillStyle(e.col, 1);
+  g.fillCircle(0, -s * 0.7, s * 0.5);
+  // horns
+  g.fillStyle(0x3a3a45, 1);
+  g.fillTriangle(-s * 0.4, -s * 0.85, -s * 0.3, -s * 1.2, -s * 0.2, -s * 0.85);
+  g.fillTriangle(s * 0.4, -s * 0.85, s * 0.3, -s * 1.2, s * 0.2, -s * 0.85);
+  // eyes glowing
+  g.fillStyle(e.eyeCol ?? 0xff4400, 1);
+  g.fillCircle(-s * 0.2, -s * 0.7, 1.8);
+  g.fillCircle(s * 0.2, -s * 0.7, 1.8);
+}
+
+function drawDruid(g, e) {
+  const s = e.size;
+  g.fillStyle(0x000000, 0.4); g.fillEllipse(0, s + 2, s * 1.4, s * 0.4);
+  // robe
+  g.fillStyle(e.col, 1);
+  g.fillTriangle(-s * 1.1, s, 0, -s * 0.3, s * 1.1, s);
+  g.fillStyle(0x2a4a2a, 1);
+  g.fillTriangle(-s * 0.9, s, 0, -s * 0.1, s * 0.9, s);
+  // hood
+  g.fillStyle(0x1a3a1a, 1);
+  g.fillCircle(0, -s * 0.3, s * 0.55);
+  // face inside hood
+  g.fillStyle(0x000000, 1);
+  g.fillCircle(0, -s * 0.2, s * 0.35);
+  g.fillStyle(e.eyeCol ?? 0x88ff44, 1);
+  g.fillCircle(-s * 0.12, -s * 0.25, 1.4);
+  g.fillCircle(s * 0.12, -s * 0.25, 1.4);
+  // staff with leaves
+  g.lineStyle(2, 0x4a2a10, 1);
+  g.beginPath(); g.moveTo(s * 0.6, s * 0.3); g.lineTo(s * 0.9, -s * 1); g.strokePath();
+  g.fillStyle(0x66aa44, 0.9);
+  g.fillCircle(s * 0.85, -s * 0.95, 3);
+  g.fillCircle(s, -s * 0.85, 2.5);
+  g.fillCircle(s * 0.78, -s * 0.78, 2);
+}
+
+function drawElemental(g, e) {
+  const s = e.size;
+  g.fillStyle(0x000000, 0.5); g.fillEllipse(0, s + 4, s * 1.6, s * 0.5);
+  // crystal core (4 facets)
+  g.fillStyle(0x2a4a8a, 1);
+  g.fillTriangle(-s, 0, 0, -s * 1.2, 0, 0);
+  g.fillStyle(0x4488dd, 1);
+  g.fillTriangle(0, -s * 1.2, s, 0, 0, 0);
+  g.fillStyle(0x66aaee, 1);
+  g.fillTriangle(-s, 0, 0, 0, 0, s * 1.2);
+  g.fillStyle(0x88ccff, 1);
+  g.fillTriangle(0, 0, s, 0, 0, s * 1.2);
+  // glow
+  g.lineStyle(2, 0xc0e8ff, 0.85);
+  g.beginPath();
+  g.moveTo(-s, 0); g.lineTo(0, -s * 1.2); g.lineTo(s, 0); g.lineTo(0, s * 1.2); g.closePath();
+  g.strokePath();
+  // central glow
+  const pulse = (Math.sin(e.bob * 0.4) + 1) * 0.5;
+  g.fillStyle(0xffffff, 0.4 + pulse * 0.4);
+  g.fillCircle(0, 0, s * 0.4);
+  // floating runes around
+  g.fillStyle(e.eyeCol ?? 0xc0e0ff, 0.85);
+  for (let i = 0; i < 3; i++) {
+    const a = e.bob * 0.05 + (i / 3) * Math.PI * 2;
+    g.fillCircle(Math.cos(a) * s * 1.4, Math.sin(a) * s * 1.4 - s * 0.3, 1.4);
+  }
 }
 
 function drawBoss(g, e) {

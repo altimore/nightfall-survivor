@@ -57,6 +57,16 @@ export const ETYPES = {
               resists: { physical: 0.3, holy: 1.8, ice: 0.5 } },
   vampire:  { label:"Vampire Mineur", icon:"🦇", col:0x6a1a3a, eyeCol:0xff0033, size:12, baseHp:90,  baseSpd:36, dmg:12, xpVal:8, behavior:"direct",  wave:165,
               resists: { holy: 1.7, fire: 1.3, dark: 0.5 } },
+  wolf:     { label:"Loup Spectral", icon:"🐺", col:0x4a4a55, eyeCol:0xffaa00, size:11, baseHp:40,  baseSpd:55, dmg:9,  xpVal:5, behavior:"charge",  wave:100,
+              resists: { ice: 0.7, fire: 1.2 } },
+  demon:    { label:"Démon Mineur",   icon:"😈", col:0x8a1a1a, eyeCol:0xffff00, size:13, baseHp:60,  baseSpd:30, dmg:11, xpVal:7, behavior:"ranged",  wave:135,
+              resists: { fire: 0, holy: 1.6, ice: 1.3 } },
+  gargoyle: { label:"Gargouille",    icon:"🗿", col:0x6a6a78, eyeCol:0xff4400, size:16, baseHp:200, baseSpd:14, dmg:18, xpVal:10,behavior:"direct",  wave:180,
+              resists: { physical: 0.5, ice: 1.5, holy: 1.2 } },
+  druid:    { label:"Druide Sombre", icon:"🌿", col:0x3a6a3a, eyeCol:0x88ff44, size:11, baseHp:55,  baseSpd:30, dmg:8,  xpVal:7, behavior:"kite",    wave:155,
+              resists: { fire: 1.5, poison: 0.3, ice: 1.2 } },
+  elemental:{ label:"Élémentaire",   icon:"💎", col:0x4488dd, eyeCol:0xc0e0ff, size:15, baseHp:280, baseSpd:18, dmg:20, xpVal:12,behavior:"direct",  wave:200,
+              resists: { ice: 0, lightning: 1.5, fire: 0.4, physical: 0.6 } },
 };
 
 // Damage type → status effect template (applied on hit when resist > 0)
@@ -151,6 +161,11 @@ export const ENEMY_DROPS = {
   slime:    [{ item: 'heal',     chance: 0.08 }, { item: 'regen',      chance: 0.05 }],
   wraith:   [{ item: 'speed',    chance: 0.10 }, { item: 'shield',     chance: 0.05 }],
   vampire:  [{ item: 'megaheal', chance: 0.10 }, { item: 'rage',       chance: 0.08 }, { item: 'damageBuff', chance: 0.05 }],
+  wolf:     [{ item: 'speed',    chance: 0.08 }, { item: 'rage',       chance: 0.05 }],
+  demon:    [{ item: 'damageBuff',chance: 0.10}, { item: 'rage',       chance: 0.06 }],
+  gargoyle: [{ item: 'megaheal', chance: 0.20 }, { item: 'shield',     chance: 0.15 }, { item: 'damageBuff', chance: 0.08 }],
+  druid:    [{ item: 'regen',    chance: 0.15 }, { item: 'heal',       chance: 0.10 }, { item: 'magnet', chance: 0.08 }],
+  elemental:[{ item: 'megaheal', chance: 0.25 }, { item: 'shield',     chance: 0.18 }, { item: 'rage', chance: 0.10 }, { item: 'damageBuff', chance: 0.10 }],
 };
 
 // ════════════════════════════════════════
