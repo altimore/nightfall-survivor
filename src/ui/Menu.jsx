@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { SKILLS, MODES } from '../game/data.js';
+import { CHARACTERS, CHARACTER_LIST } from '../game/characters.js';
 import { MenuBg } from './SceneBg.jsx';
 import { useGamepadActions } from './useGamepad.js';
 import { useT, getLang, setLang } from '../i18n.js';
@@ -8,7 +9,7 @@ import { playSfx } from '../game/audio.js';
 // Starter weapons : utility powers like 'gather' are excluded — they can't kill on their own.
 const WEAPONS = ['dagger', 'sword', 'whip', 'missile', 'floating', 'grenade', 'flamethrower', 'cloud', 'nova', 'lightning', 'chargedBolt', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
 
-export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, uiScale, setUiScale, onOpenGuide, onOpenShop }) {
+export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, character, onCharacterChange, uiScale, setUiScale, onOpenGuide, onOpenShop }) {
   const t = useT();
   const lang = getLang();
   const pickWeapon = id => { if (id !== weapon) playSfx('uimove'); onWeaponChange(id); };
@@ -98,6 +99,46 @@ export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChan
         <div style={{ color: '#d8b8f0', fontSize: '1.18em', marginBottom: 24, letterSpacing: 2 }}>
           {t('menu.objective')} <strong style={{ color: '#ffe066' }}>{t('menu.goalDuration')}</strong>
         </div>
+
+        {onCharacterChange && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ color: '#c77dff', fontSize: '0.91em', letterSpacing: 4, marginBottom: 10 }}>{t('menu.character') || 'PERSONNAGE'}</div>
+            <div style={{ display: 'flex', gap: '0.4em', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {CHARACTER_LIST.map(id => {
+                const ch = CHARACTERS[id];
+                const active = character === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => { if (id !== character) playSfx('uimove'); onCharacterChange(id); }}
+                    onMouseDown={e => e.preventDefault()}
+                    tabIndex={-1}
+                    title={ch.desc}
+                    style={{
+                      padding: '0.45em 0.7em',
+                      background: active ? `${ch.color}22` : 'rgba(8,0,22,0.6)',
+                      border: `1px solid ${active ? ch.color : '#4a1d6a'}`,
+                      color: active ? ch.color : '#9d4edd',
+                      fontFamily: "'Cinzel',serif", fontSize: '0.85em', letterSpacing: 1,
+                      cursor: 'pointer', borderRadius: 4,
+                      boxShadow: active ? `0 0 14px ${ch.color}66` : 'none',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15em',
+                      minWidth: '5.5em',
+                    }}
+                  >
+                    <span style={{ fontSize: '1.45em' }}>{ch.icon}</span>
+                    <span>{ch.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {character && CHARACTERS[character]?.desc && (
+              <div style={{ color: '#b89ec4', fontSize: '0.78em', marginTop: 6, letterSpacing: 1, textAlign: 'center' }}>
+                {CHARACTERS[character].desc}
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ marginBottom: 18 }}>
           <div style={{ color: '#c77dff', fontSize: '0.91em', letterSpacing: 4, marginBottom: 10 }}>{t('menu.startWeapon')}</div>

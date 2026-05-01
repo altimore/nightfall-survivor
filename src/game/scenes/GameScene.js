@@ -6,6 +6,7 @@ import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } 
 import { bus } from '../bus.js';
 import { getOptions } from '../PhaserGame.js';
 import { applyMetaToPlayer, addGold, recordRun } from '../meta.js';
+import { CHARACTERS } from '../characters.js';
 
 const BOSS_NAMES = [
   "L'Émissaire des Ténèbres",
@@ -134,16 +135,24 @@ export default class GameScene extends Phaser.Scene {
     this.scale.on('resize', () => { this.decorations = this.generateDecor(); });
 
     const opts = getOptions();
-    const startW = opts.startWeapon || 'dagger';
+    const charId = opts.character || 'vampire';
+    const ch = CHARACTERS[charId] || CHARACTERS.vampire;
+    const startW = opts.startWeapon || ch.starterWeapon || 'dagger';
     const startW2 = opts.startWeapon2 || startW;
     const num = Math.max(1, Math.min(4, opts.numPlayers || 1));
     this.mode = opts.mode || 'normal';
 
+    const initPlayer = (p, weapon) => {
+      p.skills = { [weapon]: 1 };
+      applyMetaToPlayer(p);
+      // Character class bonuses applied AFTER meta to layer on top
+      if (ch?.apply) ch.apply(p);
+    };
+
     this.players = [];
     if (num === 1) {
       const p = new Player(this, this.W / 2, this.H / 2, 0, CONTROLLER_SOLO);
-      p.skills = { [startW]: 1 };
-      applyMetaToPlayer(p);
+      initPlayer(p, startW);
       this.players.push(p);
     } else {
       const controllers = [CONTROLLER_P1, CONTROLLER_P2, CONTROLLER_P3, CONTROLLER_P4];
@@ -155,8 +164,7 @@ export default class GameScene extends Phaser.Scene {
         const px = this.W / 2 + Math.cos(ang) * r;
         const py = this.H / 2 + Math.sin(ang) * r;
         const p = new Player(this, px, py, i, controllers[i]);
-        p.skills = { [startWeapons[i]]: 1 };
-        applyMetaToPlayer(p);
+        initPlayer(p, startWeapons[i]);
         this.players.push(p);
       }
     }

@@ -22,6 +22,7 @@ export default function App() {
   const [levelUp, setLevelUp] = useState({ lv: 1, choices: [] });
   const [startWeapon, setStartWeapon] = useState('dagger');
   const [startMode, setStartMode] = useState('normal');
+  const [character, setCharacter] = useState('vampire');
   const [numPlayers, setNumPlayers] = useState(1);
   const [bossAnnounce, setBossAnnounce] = useState(null);
   const [runStats, setRunStats] = useState(null);
@@ -119,7 +120,7 @@ export default function App() {
   };
 
   const start = () => {
-    setOptions({ startWeapon, mode: startMode, numPlayers });
+    setOptions({ startWeapon, mode: startMode, numPlayers, character });
     setRunStats(null);
     if (!gameRef.current) {
       gameRef.current = createGame(containerRef.current);
@@ -186,7 +187,7 @@ export default function App() {
       {bossAnnounce && phase === 'playing' && (
         <BossTitle key={bossAnnounce.key} name={bossAnnounce.name} onDone={() => setBossAnnounce(null)} />
       )}
-      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} onOpenShop={() => setPhase('shop')} />}
+      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} character={character} onCharacterChange={setCharacter} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} onOpenShop={() => setPhase('shop')} />}
       {phase === 'compendium' && <Compendium onClose={() => setPhase('menu')} />}
       {phase === 'shop' && <Shop onClose={() => setPhase('menu')} />}
       {phase === 'levelup' && (
