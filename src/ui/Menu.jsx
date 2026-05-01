@@ -6,7 +6,7 @@ import { useT, getLang, setLang } from '../i18n.js';
 import { playSfx } from '../game/audio.js';
 
 // Starter weapons : utility powers like 'gather' are excluded — they can't kill on their own.
-const WEAPONS = ['dagger', 'sword', 'whip', 'missile', 'nova', 'lightning', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
+const WEAPONS = ['dagger', 'sword', 'whip', 'missile', 'floating', 'grenade', 'nova', 'lightning', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
 
 export default function Menu({ onStart, weapon, onWeaponChange, uiScale, setUiScale, onOpenGuide }) {
   const t = useT();

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GOAL_TIME } from '../config.js';
-import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile } from '../entities.js';
+import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade } from '../entities.js';
 import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES } from '../data.js';
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
@@ -144,8 +144,11 @@ export default class GameScene extends Phaser.Scene {
     this.elapsed = 0;
     this.kills = 0;
     this.spawnT = 1;
-    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, whip: 0, charm: 0, missile: 0 };
+    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, whip: 0, charm: 0, missile: 0, grenade: 0 };
     this.missiles = [];
+    this.floating = [];
+    this.floatingT = 0;
+    this.grenades = [];
     this.orbitAngle = 0;
     this.orbitHits = new Map();
     this.trail = [];
@@ -288,6 +291,7 @@ export default class GameScene extends Phaser.Scene {
       const lv = slv(p, 'missile');
       cooldowns.missile = r01(this.weaponT.missile, lv >= 5 ? 0.8 : 1.2);
     }
+    if (slv(p, 'grenade') > 0) cooldowns.grenade = r01(this.weaponT.grenade, 2);
     if (slv(p, 'traps') > 0) {
       const lv = slv(p, 'traps');
       cooldowns.traps = r01(this.trapT, lv >= 5 ? 1.5 : lv >= 4 ? 2 : 3);
@@ -498,6 +502,8 @@ export default class GameScene extends Phaser.Scene {
     this.updateGatherers(dt, p);
     this.updateTurrets(dt, p, dmgBoost);
     this.updateMissiles(dt, p);
+    this.updateFloating(dt, p, dmgBoost);
+    this.updateGrenades(dt, p);
 
     // ── Player projectiles
     for (const proj of this.projectiles) {
@@ -593,6 +599,8 @@ export default class GameScene extends Phaser.Scene {
     for (const g of this.gatherers) g.redraw();
     for (const proj of this.projectiles) proj.redraw();
     for (const m of this.missiles) m.redraw();
+    for (const b of this.floating) b.redraw();
+    for (const gr of this.grenades) gr.redraw();
     for (const ep of this.eprojectiles) ep.redraw();
     for (const o of this.orbs) o.redraw();
     this.drawOrbits(p);
@@ -887,6 +895,28 @@ export default class GameScene extends Phaser.Scene {
           this.fxCharm(e.x, e.y);
         }
         if (candidates.length > 0) playSfx('itempickup');
+      }
+    }
+
+    const grlv = slv(p, 'grenade');
+    if (grlv > 0) {
+      this.weaponT.grenade -= dt;
+      if (this.weaponT.grenade <= 0) {
+        this.weaponT.grenade = 2;
+        const count = grlv >= 4 ? 3 : grlv >= 3 ? 2 : 1;
+        const aoe = (70 + grlv * 5) * (grlv >= 2 ? 1.3 : 1);
+        const dmg = (35 + grlv * 8) * p.dmgM * dmgBoost * (grlv >= 4 ? 1.3 : 1);
+        const sorted = this.enemies
+          .filter(e => !e.charmed)
+          .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
+        for (let i = 0; i < count; i++) {
+          const target = sorted[i % Math.max(1, sorted.length)];
+          const a = target ? Math.atan2(target.y - p.y, target.x - p.x) : Math.random() * Math.PI * 2;
+          const offa = (i - (count - 1) / 2) * 0.3;
+          const speed = 260;
+          this.grenades.push(new Grenade(this, p.x, p.y, Math.cos(a + offa) * speed, Math.sin(a + offa) * speed, dmg, aoe, 0.7, grlv));
+        }
+        playSfx('itempickup');
       }
     }
 
@@ -1311,6 +1341,125 @@ export default class GameScene extends Phaser.Scene {
           return false;
         }
       }
+      return true;
+    });
+  }
+
+  updateFloating(dt, p, dmgBoost) {
+    const lvl = slv(p, 'floating');
+    if (lvl <= 0 && this.floating.length === 0) return;
+    if (lvl > 0) {
+      const max = lvl >= 5 ? 6 : lvl >= 4 ? 5 : lvl >= 3 ? 4 : lvl >= 2 ? 3 : 2;
+      const interval = lvl >= 4 ? 2 : 3;
+      const idle = this.floating.filter(b => b.state === 'idle').length;
+      this.floatingT -= dt;
+      if (this.floatingT <= 0 && idle < max) {
+        this.floatingT = interval;
+        const angle = (idle / Math.max(1, max)) * Math.PI * 2 + Math.random() * 0.4;
+        this.floating.push(new FloatingBlade(this, 0, angle));
+      }
+    }
+    const triggerR = 90;
+    const radius = 55;
+    const angSpeed = 1.2;
+    this.floating = this.floating.filter(b => {
+      if (b.state === 'idle') {
+        b.angle += angSpeed * dt;
+        b.x = p.x + Math.cos(b.angle) * radius;
+        b.y = p.y + Math.sin(b.angle) * radius;
+        let target = null, td = Infinity;
+        for (const e of this.enemies) {
+          if (e.charmed) continue;
+          const d = Math.hypot(e.x - b.x, e.y - b.y);
+          if (d < triggerR && d < td) { td = d; target = e; }
+        }
+        if (target) {
+          b.state = 'flying';
+          const a = Math.atan2(target.y - b.y, target.x - b.x);
+          b.angle = a;
+          const speed = 480;
+          b.vx = Math.cos(a) * speed;
+          b.vy = Math.sin(a) * speed;
+          b.dmg = (30 + lvl * 6) * p.dmgM * dmgBoost * (lvl >= 3 ? 1.3 : 1) * (lvl >= 5 ? 1.5 : 1);
+          b.life = 1.5;
+          playSfx('dagger');
+        }
+        return true;
+      }
+      // flying
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      b.life -= dt;
+      if (b.life <= 0) { b.destroy(); return false; }
+      for (const e of this.enemies) {
+        if (e.charmed) continue;
+        if (Math.hypot(b.x - e.x, b.y - e.y) < e.size + 5) {
+          const dealt = e.takeDamage(b.dmg, 'physical', this);
+          if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+          if (lvl >= 5) {
+            for (const e2 of this.enemies) {
+              if (e2 === e || e2.charmed) continue;
+              if (Math.hypot(e2.x - b.x, e2.y - b.y) < 50 + e2.size) {
+                e2.takeDamage(b.dmg * 0.5, 'fire', this);
+              }
+            }
+            this.fxNova(b.x, b.y, 50);
+            this.shake(0.004, 70);
+          }
+          b.destroy();
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  updateGrenades(dt, p) {
+    this.grenades = this.grenades.filter(g => {
+      g.life -= dt;
+      g.fuse -= dt;
+      g.x += g.vx * dt;
+      g.y += g.vy * dt;
+      g.vx *= 0.94;
+      g.vy *= 0.94;
+      let triggered = g.fuse <= 0;
+      if (!triggered) {
+        for (const e of this.enemies) {
+          if (e.charmed) continue;
+          if (Math.hypot(g.x - e.x, g.y - e.y) < e.size + 5) { triggered = true; break; }
+        }
+      }
+      if (triggered) {
+        const explode = (cx, cy) => {
+          for (const e of this.enemies) {
+            if (e.charmed) continue;
+            if (Math.hypot(e.x - cx, e.y - cy) < g.aoe + e.size) {
+              const dealt = e.takeDamage(g.dmg, 'fire', this);
+              if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+            }
+          }
+          this.fxNova(cx, cy, g.aoe);
+        };
+        explode(g.x, g.y);
+        this.shake(0.005, 100);
+        playSfx('nova');
+        if (g.lvl >= 5) {
+          for (let i = 0; i < 2; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = 30 + Math.random() * 30;
+            const cx = g.x + Math.cos(a) * r;
+            const cy = g.y + Math.sin(a) * r;
+            this.time.delayedCall(140 * (i + 1), () => {
+              if (this.over) return;
+              explode(cx, cy);
+              playSfx('nova');
+            });
+          }
+        }
+        g.destroy();
+        return false;
+      }
+      if (g.life <= 0) { g.destroy(); return false; }
       return true;
     });
   }

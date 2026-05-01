@@ -586,6 +586,85 @@ export class TrailTile {
 }
 
 // ────────────────────────────────────────
+// Spectral grenade — short-fuse projectile with friction, AoE on impact.
+// ────────────────────────────────────────
+export class Grenade {
+  constructor(scene, x, y, vx, vy, dmg, aoe, fuse, lvl) {
+    this.gfx = scene.add.graphics().setDepth(15);
+    this.x = x; this.y = y;
+    this.vx = vx; this.vy = vy;
+    this.dmg = dmg;
+    this.aoe = aoe;
+    this.fuse = fuse;
+    this.lvl = lvl;
+    this.life = 2.5;
+    this.bob = 0;
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    this.bob += 0.45;
+    const fuseT = Math.max(0, this.fuse);
+    const blink = (Math.sin(this.bob * (4 + (1 - fuseT) * 8)) + 1) * 0.5;
+    // body
+    g.fillStyle(0x3a3a3a, 1);
+    g.fillCircle(0, 0, 7);
+    g.fillStyle(0x222222, 1);
+    g.fillCircle(-1.5, -1.5, 2);
+    // top cap
+    g.fillStyle(0x2a2a2a, 1);
+    g.fillRect(-2, -10, 4, 4);
+    // fuse spark
+    g.fillStyle(blink > 0.5 ? 0xffffff : 0xffaa00, 1);
+    g.fillCircle(0, -12, 1.6 + blink * 1.2);
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
+// Floating blade — orbits the player at idle, fires once at the nearest enemy.
+// ────────────────────────────────────────
+export class FloatingBlade {
+  constructor(scene, dmg, angle) {
+    this.gfx = scene.add.graphics().setDepth(13);
+    this.x = 0; this.y = 0;
+    this.dmg = dmg;
+    this.state = 'idle'; // 'idle' | 'flying'
+    this.angle = angle;
+    this.vx = 0; this.vy = 0;
+    this.life = 999;
+    this.bob = Math.random() * Math.PI * 2;
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    g.rotation = this.angle;
+    if (this.state === 'idle') {
+      // soft halo + dagger silhouette
+      g.fillStyle(0xbcd0ff, 0.32);
+      g.fillCircle(0, 0, 9);
+      g.fillStyle(0xa0c4ff, 1);
+      g.fillTriangle(-9, -1.7, 11, 0, -9, 1.7);
+      g.fillStyle(0x4a2c8a, 1);
+      g.fillRect(-12, -2.5, 4, 5);
+    } else {
+      // flying dagger with trail
+      g.fillStyle(0xc7e0ff, 0.55);
+      g.fillTriangle(-22, -1.2, -10, 0, -22, 1.2);
+      g.fillStyle(0xa0c4ff, 1);
+      g.fillTriangle(-12, -2.5, 14, 0, -12, 2.5);
+      g.fillStyle(0x4a2c8a, 1);
+      g.fillRect(-15, -3, 4, 6);
+    }
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
 // Homing missile — locks on a target and steers toward it, AoE on impact.
 // ────────────────────────────────────────
 export class HomingMissile {
