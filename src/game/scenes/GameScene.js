@@ -2387,6 +2387,7 @@ export default class GameScene extends Phaser.Scene {
       if (d < 18) {
         p.xp += o.value;
         playSfx('xp');
+        this.fxXpPop(p.x, p.y, o.value);
         if (p.xp >= xpFor(p.level)) {
           p.xp -= xpFor(p.level);
           p.level++;
@@ -2968,6 +2969,38 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // Big celebratory banner shown at the player's position. Used for evolutions, elite kills, etc.
+  // Throttled XP pickup popup. Aggregates multiple pickups within a 200 ms window
+  // into a single floating "+N" text to avoid spam.
+  fxXpPop(x, y, value) {
+    if (!this._xpPopBuf) this._xpPopBuf = { sum: 0, x, y, scheduled: false };
+    this._xpPopBuf.sum += value;
+    this._xpPopBuf.x = x;
+    this._xpPopBuf.y = y;
+    if (!this._xpPopBuf.scheduled) {
+      this._xpPopBuf.scheduled = true;
+      this.time.delayedCall(180, () => {
+        if (!this._xpPopBuf) return;
+        const buf = this._xpPopBuf;
+        this._xpPopBuf = null;
+        const t = this.add.text(buf.x, buf.y - 20, `+${buf.sum} XP`, {
+          fontFamily: "'Cinzel', serif",
+          fontSize: '13px',
+          color: '#9d4edd',
+          stroke: '#1a0030',
+          strokeThickness: 3,
+        }).setOrigin(0.5).setDepth(40);
+        this.tweens.add({
+          targets: t,
+          y: buf.y - 50,
+          alpha: 0,
+          duration: 600,
+          ease: 'Cubic.out',
+          onComplete: () => t.destroy(),
+        });
+      });
+    }
+  }
+
   fxBanner(text, color = '#ffd966', size = 28) {
     const p = this.players?.find(pl => !pl.dead) || this.players?.[0];
     if (!p) return;

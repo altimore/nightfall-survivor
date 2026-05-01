@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { SKILLS, MODES } from '../game/data.js';
 import { CHARACTERS, CHARACTER_LIST } from '../game/characters.js';
+import { getDailyConfig, loadDailyState } from '../game/daily.js';
 import { MenuBg } from './SceneBg.jsx';
 import { useGamepadActions } from './useGamepad.js';
 import { useT, getLang, setLang } from '../i18n.js';
@@ -277,21 +278,7 @@ export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mo
               }}
             >💰 {t('shop.open') || 'BOUTIQUE'}</button>
           )}
-          {onStartDaily && (
-            <button
-              onClick={() => { playSfx('uipick'); onStartDaily(); }}
-              onMouseDown={e => e.preventDefault()}
-              tabIndex={-1}
-              style={{
-                padding: '0.55em 1.4em',
-                background: 'linear-gradient(135deg,#5a1a8a,#3a0a5a)',
-                border: '1px solid #c77dff', color: '#e0aaff',
-                fontFamily: "'Cinzel',serif", fontSize: '0.95em', letterSpacing: 3,
-                cursor: 'pointer', borderRadius: 3,
-                boxShadow: '0 0 18px rgba(199,125,255,0.4)',
-              }}
-            >🗓 {t('menu.daily') || 'DÉFI DU JOUR'}</button>
-          )}
+          {onStartDaily && <DailyButton onStartDaily={onStartDaily} t={t} />}
         </div>
 
         {setUiScale && (
@@ -327,6 +314,35 @@ export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mo
         <div style={{ marginTop: 6, color: '#7b46c4', fontSize: '0.82em', letterSpacing: 1 }}>
           {t('menu.version')}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DailyButton({ onStartDaily, t }) {
+  const cfg = getDailyConfig();
+  const dailyState = loadDailyState();
+  const best = dailyState.date === cfg.date ? dailyState.best : null;
+  const ch = CHARACTERS[cfg.character];
+  const sk = SKILLS[cfg.weapon];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+      <button
+        onClick={() => { playSfx("uipick"); onStartDaily(); }}
+        onMouseDown={e => e.preventDefault()}
+        tabIndex={-1}
+        style={{
+          padding: "0.55em 1.4em",
+          background: "linear-gradient(135deg,#5a1a8a,#3a0a5a)",
+          border: "1px solid #c77dff", color: "#e0aaff",
+          fontFamily: "'Cinzel',serif", fontSize: "0.95em", letterSpacing: 3,
+          cursor: "pointer", borderRadius: 3,
+          boxShadow: "0 0 18px rgba(199,125,255,0.4)",
+        }}
+      >🗓 {t("menu.daily") || "DÉFI DU JOUR"}</button>
+      <div style={{ color: "#9d6dd0", fontSize: "0.7em", letterSpacing: 1, textAlign: "center" }}>
+        {ch?.icon} {ch?.name} · {sk?.icon} {sk?.name} · {t(`modes.${cfg.mode}.name`) || cfg.mode}
+        {best && <span style={{ marginLeft: "0.5em", color: "#ffd966" }}>· best {best.score}</span>}
       </div>
     </div>
   );
