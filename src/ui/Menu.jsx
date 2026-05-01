@@ -82,13 +82,15 @@ export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChan
         backdropFilter: 'blur(4px)',
         border: '1px solid rgba(123,47,190,0.35)',
         borderRadius: 12,
-        padding: '2em 3em',
+        padding: 'clamp(0.8em, 2vh, 2em) clamp(1em, 3vw, 3em)',
         boxShadow: '0 0 60px rgba(0,0,0,0.6)',
         textAlign: 'center',
-        maxWidth: '90vw',
+        maxWidth: '96vw',
+        maxHeight: '94vh',
+        overflowY: 'auto',
       }}>
         <div style={{
-          fontSize: '4.2em', fontFamily: "'Cinzel Decorative',serif",
+          fontSize: 'clamp(2.4em, 9vw, 4.2em)', fontFamily: "'Cinzel Decorative',serif",
           color: '#c77dff', textShadow: '0 0 40px #7b2fbe,0 0 80px #4a0a80',
           letterSpacing: 3, lineHeight: 1,
         }}>NIGHTFALL</div>
@@ -108,8 +110,10 @@ export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChan
                   key={id}
                   onClick={() => pickWeapon(id)}
                   style={{
-                    padding: '0.7em 1em',
-                    width: '7.5em',
+                    padding: '0.5em 0.7em',
+                    flex: '1 1 6em',
+                    minWidth: '5.5em',
+                    maxWidth: '8em',
                     background: active
                       ? `linear-gradient(160deg, ${sk.color}28, rgba(8,0,25,.97))`
                       : 'linear-gradient(160deg,rgba(22,6,55,.6),rgba(8,0,25,.97))',
