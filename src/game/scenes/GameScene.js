@@ -259,7 +259,26 @@ export default class GameScene extends Phaser.Scene {
     let hpMul = 1 + tier * 0.3;
     let dmgMul = 1 + tier * 0.1;
     if (this.mode === 'horde') hpMul *= 0.6;
-    this.enemies.push(new Enemy(this, x, y, typeName, hpMul, 1, dmgMul));
+    const e = new Enemy(this, x, y, typeName, hpMul, 1, dmgMul);
+    if (typeName === 'boss') {
+      const kinds = {
+        shadow:  { col: 0x8b0000, eyeCol: 0xffff00, projCol: 0xff4400, move: 'standard', label: "Carcassemort" },
+        frost:   { col: 0x4a78a8, eyeCol: 0xc0e0ff, projCol: 0x88ccff, move: 'orbiter',  label: "L'Hiver Maudit" },
+        inferno: { col: 0xa83018, eyeCol: 0xffaa00, projCol: 0xff8800, move: 'charger',  label: "Brasier Éternel" },
+        void:    { col: 0x4a1a8a, eyeCol: 0xff00ff, projCol: 0xb088ff, move: 'phasing',  label: "L'Abime Sans Fond" },
+      };
+      const kindIds = Object.keys(kinds);
+      const kindId = kindIds[Math.floor(Math.random() * kindIds.length)];
+      const k = kinds[kindId];
+      e.kind = kindId;
+      e.col = k.col;
+      e.eyeCol = k.eyeCol;
+      e.projCol = k.projCol;
+      e.kindMove = k.move;
+      e.kindLabel = k.label;
+      e.phaseT = 5;
+    }
+    this.enemies.push(e);
   }
 
   spawnObstacle() {
@@ -449,7 +468,7 @@ export default class GameScene extends Phaser.Scene {
       hasBoss = true;
       if (!this.bossSeen.has(e)) {
         this.bossSeen.add(e);
-        const name = BOSS_NAMES[Math.floor(Math.random() * BOSS_NAMES.length)];
+        const name = e.kindLabel || BOSS_NAMES[Math.floor(Math.random() * BOSS_NAMES.length)];
         e.name = name;
         bus.emit('boss:appear', { name });
       }
@@ -881,7 +900,51 @@ export default class GameScene extends Phaser.Scene {
       }
       case 'boss': {
         smooth = 3;
-        if (dist > 500) {
+        if (e.kindMove === 'orbiter') {
+          // Maintain ~280 px orbit, glide tangentially when in range
+          const orbitR = 280;
+          if (dist > orbitR + 40) {
+            tvx = ndx * e.speed;
+            tvy = ndy * e.speed;
+          } else if (dist < orbitR - 40) {
+            tvx = -ndx * e.speed * 0.8;
+            tvy = -ndy * e.speed * 0.8;
+          } else {
+            tvx = -ndy * e.speed * 1.1;
+            tvy = ndx * e.speed * 1.1;
+          }
+        } else if (e.kindMove === 'charger') {
+          if (e.charging) {
+            e.chargeDur -= dt;
+            e.x += e.chargeDx * e.speed * 4 * dt;
+            e.y += e.chargeDy * e.speed * 4 * dt;
+            directMove = true;
+            if (e.chargeDur <= 0) { e.charging = false; e.chargeTimer = 3.5 + Math.random() * 1.5; }
+          } else {
+            e.chargeTimer = (e.chargeTimer ?? 4) - dt;
+            tvx = ndx * e.speed * 0.4;
+            tvy = ndy * e.speed * 0.4;
+            if (e.chargeTimer <= 0 && dist > 100) {
+              e.charging = true;
+              e.chargeDx = ndx; e.chargeDy = ndy;
+              e.chargeDur = 0.5;
+            }
+          }
+        } else if (e.kindMove === 'phasing') {
+          e.phaseT -= dt;
+          if (e.phaseT <= 0) {
+            e.phaseT = 6;
+            const a = Math.random() * Math.PI * 2;
+            const r = 200 + Math.random() * 80;
+            this.fxNova(e.x, e.y, 35);
+            e.x = p.x + Math.cos(a) * r;
+            e.y = p.y + Math.sin(a) * r;
+            this.fxNova(e.x, e.y, 35);
+          }
+          tvx = ndx * e.speed * 0.4;
+          tvy = ndy * e.speed * 0.4;
+        }
+        if (dist > 600 && e.kindMove !== 'orbiter') {
           e.x = p.x + (Math.random() - 0.5) * 300;
           e.y = p.y + (Math.random() - 0.5) * 300;
         }
@@ -1814,11 +1877,12 @@ export default class GameScene extends Phaser.Scene {
     const speed = 130;
     const r = 7;
     const dmg = e.dmg;
+    const col = e.projCol ?? 0xff4400;
     switch (pattern) {
       case 0: { // 8-pointed star burst
         for (let i = 0; i < 8; i++) {
           const a = (i / 8) * Math.PI * 2;
-          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed, Math.sin(a) * speed, dmg, 0xff4400, r));
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed, Math.sin(a) * speed, dmg, col, r));
         }
         break;
       }
@@ -1826,13 +1890,13 @@ export default class GameScene extends Phaser.Scene {
         const offset = (e.shootCount || 0) * 0.5;
         for (let i = 0; i < 6; i++) {
           const a = (i / 6) * Math.PI * 2 + offset;
-          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.9, Math.sin(a) * speed * 0.9, dmg, 0xff8844, r));
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.9, Math.sin(a) * speed * 0.9, dmg, col, r));
         }
         this.time.delayedCall(220, () => {
           if (e.hp <= 0) return;
           for (let i = 0; i < 6; i++) {
             const a = (i / 6) * Math.PI * 2 + offset + Math.PI / 6;
-            this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 1.1, Math.sin(a) * speed * 1.1, dmg, 0xff8844, r));
+            this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 1.1, Math.sin(a) * speed * 1.1, dmg, col, r));
           }
         });
         break;
@@ -1842,31 +1906,31 @@ export default class GameScene extends Phaser.Scene {
         for (let i = -2; i <= 2; i++) {
           const a = baseA + i * 0.16;
           const sp = speed * 1.25;
-          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp, dmg, 0xff5566, r + 1));
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp, dmg, col, r + 1));
         }
         break;
       }
       case 3: { // double cross — slow + fast layers
         for (let i = 0; i < 6; i++) {
           const a = (i / 6) * Math.PI * 2;
-          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.7, Math.sin(a) * speed * 0.7, dmg * 0.85, 0xff4400, r));
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.7, Math.sin(a) * speed * 0.7, dmg * 0.85, col, r));
         }
         for (let i = 0; i < 6; i++) {
           const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
-          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 1.25, Math.sin(a) * speed * 1.25, dmg * 0.85, 0xff4400, r));
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 1.25, Math.sin(a) * speed * 1.25, dmg * 0.85, col, r));
         }
         break;
       }
       case 4: { // expanding ring — slow then fast wave
         for (let i = 0; i < 12; i++) {
           const a = (i / 12) * Math.PI * 2;
-          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.55, Math.sin(a) * speed * 0.55, dmg * 0.7, 0xff8844, r));
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.55, Math.sin(a) * speed * 0.55, dmg * 0.7, col, r));
         }
         this.time.delayedCall(650, () => {
           if (e.hp <= 0) return;
           for (let i = 0; i < 12; i++) {
             const a = (i / 12) * Math.PI * 2 + Math.PI / 12;
-            this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.95, Math.sin(a) * speed * 0.95, dmg * 0.7, 0xff5566, r));
+            this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.95, Math.sin(a) * speed * 0.95, dmg * 0.7, col, r));
           }
         });
         break;
@@ -1876,7 +1940,7 @@ export default class GameScene extends Phaser.Scene {
         for (let i = -1; i <= 1; i++) {
           const a = baseA + i * 0.08;
           const sp = speed * 1.45;
-          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp, dmg * 1.1, 0xff0066, r + 1));
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp, dmg * 1.1, col, r + 1));
         }
         // follow-up burst
         this.time.delayedCall(180, () => {
@@ -1884,7 +1948,7 @@ export default class GameScene extends Phaser.Scene {
           const baseA2 = Math.atan2(p.y - e.y, p.x - e.x);
           for (let i = -1; i <= 1; i++) {
             const a = baseA2 + i * 0.12;
-            this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 1.3, Math.sin(a) * speed * 1.3, dmg * 0.9, 0xff0066, r));
+            this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 1.3, Math.sin(a) * speed * 1.3, dmg * 0.9, col, r));
           }
         });
         break;
