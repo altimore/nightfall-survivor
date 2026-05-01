@@ -63,6 +63,11 @@ export const DAMAGE_COLORS = {
   holy:     '#ffd966',
 };
 
+// ════════════════════════════════════════
+// Game modes — global modifiers applied at scene start
+// ════════════════════════════════════════
+export const MODES = ['normal', 'horde', 'bossRush', 'oneShot'];
+
 // Wave schedule
 export const WAVES = [
   { t:0,   type:'bat',      count:3 },

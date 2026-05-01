@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { SKILLS } from '../game/data.js';
+import { SKILLS, MODES } from '../game/data.js';
 import { MenuBg } from './SceneBg.jsx';
 import { useGamepadActions } from './useGamepad.js';
 import { useT, getLang, setLang } from '../i18n.js';
@@ -8,7 +8,7 @@ import { playSfx } from '../game/audio.js';
 // Starter weapons : utility powers like 'gather' are excluded — they can't kill on their own.
 const WEAPONS = ['dagger', 'sword', 'whip', 'missile', 'floating', 'grenade', 'nova', 'lightning', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
 
-export default function Menu({ onStart, weapon, onWeaponChange, uiScale, setUiScale, onOpenGuide }) {
+export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChange, uiScale, setUiScale, onOpenGuide }) {
   const t = useT();
   const lang = getLang();
   const pickWeapon = id => { if (id !== weapon) playSfx('uimove'); onWeaponChange(id); };
@@ -130,6 +130,35 @@ export default function Menu({ onStart, weapon, onWeaponChange, uiScale, setUiSc
                 </button>
               );
             })}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ color: '#c77dff', fontSize: '0.91em', letterSpacing: 4, marginBottom: 10 }}>{t('modes.label')}</div>
+          <div style={{ display: 'flex', gap: '0.5em', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {MODES.map(id => {
+              const active = mode === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => { if (id !== mode) playSfx('uimove'); onModeChange(id); }}
+                  title={t(`modes.${id}.desc`)}
+                  style={{
+                    padding: '0.5em 0.9em',
+                    background: active ? 'rgba(199,125,255,0.2)' : 'transparent',
+                    border: `1px solid ${active ? '#c77dff' : '#6c3483'}`,
+                    color: active ? '#e0aaff' : '#b69ad8',
+                    fontFamily: "'Cinzel',serif",
+                    fontSize: '0.91em', letterSpacing: 2,
+                    cursor: 'pointer', borderRadius: 4,
+                    boxShadow: active ? '0 0 14px rgba(199,125,255,0.45)' : 'none',
+                  }}
+                >{t(`modes.${id}.name`)}</button>
+              );
+            })}
+          </div>
+          <div style={{ color: '#9d6dd0', fontSize: '0.78em', marginTop: 6, letterSpacing: 1 }}>
+            {t(`modes.${mode}.desc`)}
           </div>
         </div>
 

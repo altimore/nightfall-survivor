@@ -56,13 +56,17 @@ export default function InventoryOverlay({ hud, onClose }) {
           <Stat label={`${t('hud.level')}`} value={hud.lv} color="#c77dff"/>
           <Stat label="✦ XP" value={`${hud.xp}/${hud.xpN}`} color="#9d4edd"/>
           <Stat label="☠" value={hud.kills} color="#ffe066"/>
+          {stats.speed != null && <Stat label="🏃 Vit." value={`${Math.round(stats.speed)} px/s`} color="#80ffdb"/>}
+          {stats.dmgM != null && <Stat label="⚔ Dégâts" value={`×${stats.dmgM.toFixed(2)}`} color="#ff8844"/>}
+          {stats.xpM != null && <Stat label="📜 XP gain" value={`×${stats.xpM.toFixed(2)}`} color="#ffb347"/>}
           {stats.regen > 0 && <Stat label={`💚 ${t('inventory.regen')}`} value={`+${stats.regen.toFixed(1)}/s`} color="#88ff88"/>}
           {stats.lifesteal > 0 && <Stat label={`🩸 ${t('inventory.lifesteal')}`} value={`${(stats.lifesteal * 100).toFixed(0)}%`} color="#ff66aa"/>}
-          {stats.magnet > 60 && <Stat label={`🧲 ${t('inventory.magnet')}`} value={Math.round(stats.magnet)} color="#ffb347"/>}
+          {stats.magnet != null && <Stat label={`🧲 ${t('inventory.magnet')}`} value={Math.round(stats.magnet)} color="#ffd070"/>}
+          {stats.killHeal && <Stat label="❤️‍🩹 Soin/kill" value="+8 PV" color="#ff8888"/>}
           {stats.canDash && (
             <Stat
               label={`🌀 ${t('inventory.dash')}`}
-              value={stats.dashReady ? '✓ Espace' : '...'}
+              value={stats.dashReady ? '✓ Prêt' : '⏱ Cooldown'}
               color={stats.dashReady ? '#80ffdb' : '#6c3483'}
             />
           )}

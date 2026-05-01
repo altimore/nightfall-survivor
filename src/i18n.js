@@ -62,6 +62,13 @@ const dicts = {
       seconds: 's',
       level: 'Niv.',
     },
+    modes: {
+      label: 'MODE',
+      normal: { name: 'Normal', desc: 'Vagues standards' },
+      horde: { name: 'Horde', desc: '×2 spawn · ennemis 0.6× HP' },
+      bossRush: { name: 'Boss Rush', desc: 'Que des boss · toutes les 15s' },
+      oneShot: { name: 'Mort Instantanée', desc: '1 PV · dégâts ×100' },
+    },
     inventory: {
       title: 'INVENTAIRE',
       stats: 'STATS',
@@ -154,6 +161,13 @@ const dicts = {
       unlocksAt: 'appears at',
       seconds: 's',
       level: 'Lv.',
+    },
+    modes: {
+      label: 'MODE',
+      normal: { name: 'Normal', desc: 'Standard waves' },
+      horde: { name: 'Horde', desc: '×2 spawn · enemies 0.6× HP' },
+      bossRush: { name: 'Boss Rush', desc: 'Bosses only · every 15s' },
+      oneShot: { name: 'Glass Cannon', desc: '1 HP · damage ×100' },
     },
     inventory: {
       title: 'INVENTORY',

@@ -134,6 +134,12 @@ export default class GameScene extends Phaser.Scene {
     this.player = new Player(this, this.W / 2, this.H / 2);
     const startW = getOptions().startWeapon || 'dagger';
     this.player.skills = { [startW]: 1 };
+    this.mode = getOptions().mode || 'normal';
+    if (this.mode === 'oneShot') {
+      this.player.maxHp = 1;
+      this.player.hp = 1;
+      this.player.dmgM = 100;
+    }
     this.enemies = [];
     this.projectiles = [];
     this.eprojectiles = [];
@@ -242,8 +248,9 @@ export default class GameScene extends Phaser.Scene {
     const x = this.W / 2 + Math.cos(angle) * dist;
     const y = this.H / 2 + Math.sin(angle) * dist;
     const tier = Math.floor(this.elapsed / 60);
-    const hpMul = 1 + tier * 0.3;
-    const dmgMul = 1 + tier * 0.1;
+    let hpMul = 1 + tier * 0.3;
+    let dmgMul = 1 + tier * 0.1;
+    if (this.mode === 'horde') hpMul *= 0.6;
     this.enemies.push(new Enemy(this, x, y, typeName, hpMul, 1, dmgMul));
   }
 
@@ -396,12 +403,14 @@ export default class GameScene extends Phaser.Scene {
     const totalRegen = (p.regen || 0) + regenBuff;
     if (totalRegen > 0) p.hp = Math.min(p.maxHp, p.hp + totalRegen * dt);
 
-    // ── Wave schedule
-    while (this.waveIdx < WAVES.length && this.elapsed >= WAVES[this.waveIdx].t) {
-      const w = WAVES[this.waveIdx];
-      for (let i = 0; i < w.count; i++) this.spawnEnemy(w.type);
-      if (w.boss) this.spawnEnemy('boss');
-      this.waveIdx++;
+    // ── Wave schedule (skipped in boss-rush mode — handled separately below)
+    if (this.mode !== 'bossRush') {
+      while (this.waveIdx < WAVES.length && this.elapsed >= WAVES[this.waveIdx].t) {
+        const w = WAVES[this.waveIdx];
+        for (let i = 0; i < w.count; i++) this.spawnEnemy(w.type);
+        if (w.boss) this.spawnEnemy('boss');
+        this.waveIdx++;
+      }
     }
 
     // ── Boss imminent: ominous warning ~3s before scheduled boss wave
@@ -435,17 +444,23 @@ export default class GameScene extends Phaser.Scene {
       startMusic('normal');
     }
 
-    // ── Continuous spawn
+    // ── Continuous spawn (mode-specific)
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
-      this.spawnT = Math.max(0.4, 1.6 / (0.5 + this.elapsed / 90));
-      const types = ['bat'];
-      if (this.elapsed >= 30) types.push('zombie');
-      if (this.elapsed >= 60) types.push('skeleton');
-      if (this.elapsed >= 90) types.push('ghost');
-      if (this.elapsed >= 120) types.push('knight');
-      if (this.elapsed >= 150) types.push('witch');
-      this.spawnEnemy(types[Math.floor(Math.random() * types.length)]);
+      if (this.mode === 'bossRush') {
+        this.spawnT = 15;
+        this.spawnEnemy('boss');
+      } else {
+        const baseInterval = this.mode === 'horde' ? 0.7 : 1.6;
+        this.spawnT = Math.max(0.3, baseInterval / (0.5 + this.elapsed / 90));
+        const types = ['bat'];
+        if (this.elapsed >= 30) types.push('zombie');
+        if (this.elapsed >= 60) types.push('skeleton');
+        if (this.elapsed >= 90) types.push('ghost');
+        if (this.elapsed >= 120) types.push('knight');
+        if (this.elapsed >= 150) types.push('witch');
+        this.spawnEnemy(types[Math.floor(Math.random() * types.length)]);
+      }
     }
 
     // ── Item spawner
