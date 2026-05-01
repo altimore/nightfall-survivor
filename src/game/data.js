@@ -51,6 +51,12 @@ export const ETYPES = {
               resists: { all: 0.75 } },
   treasure: { label:"Sprite Doré",   icon:"💰", col:0xffd966, eyeCol:0xffffff, size:11, baseHp:35,  baseSpd:95, dmg:0,  xpVal:8, behavior:"treasure", wave:-1,
               resists: { all: 1 } },
+  slime:    { label:"Slime Maudit", icon:"🟢", col:0x3aaa44, eyeCol:0xffff00, size:13, baseHp:80,  baseSpd:22, dmg:7,  xpVal:5, behavior:"direct",  wave:75,
+              resists: { ice: 0.5, fire: 1.4, poison: 0 } },
+  wraith:   { label:"Spectre",       icon:"💨", col:0xb8a4ff, eyeCol:0xff00ff, size:10, baseHp:30,  baseSpd:45, dmg:14, xpVal:6, behavior:"phase",   wave:130,
+              resists: { physical: 0.3, holy: 1.8, ice: 0.5 } },
+  vampire:  { label:"Vampire Mineur", icon:"🦇", col:0x6a1a3a, eyeCol:0xff0033, size:12, baseHp:90,  baseSpd:36, dmg:12, xpVal:8, behavior:"direct",  wave:165,
+              resists: { holy: 1.7, fire: 1.3, dark: 0.5 } },
 };
 
 // Damage type → status effect template (applied on hit when resist > 0)
@@ -142,6 +148,9 @@ export const ENEMY_DROPS = {
   witch:    [{ item: 'regen',    chance: 0.10 }, { item: 'freeze',     chance: 0.08 }, { item: 'rage',   chance: 0.06 }, { item: 'swiftness', chance: 0.06 }],
   treasure: [{ item: 'magnet',   chance: 0.30 }, { item: 'megaheal',   chance: 0.20 }],
   boss:     [{ item: 'megaheal', chance: 0.50 }, { item: 'damageBuff', chance: 0.50 }, { item: 'shield', chance: 0.50 }],
+  slime:    [{ item: 'heal',     chance: 0.08 }, { item: 'regen',      chance: 0.05 }],
+  wraith:   [{ item: 'speed',    chance: 0.10 }, { item: 'shield',     chance: 0.05 }],
+  vampire:  [{ item: 'megaheal', chance: 0.10 }, { item: 'rage',       chance: 0.08 }, { item: 'damageBuff', chance: 0.05 }],
 };
 
 // ════════════════════════════════════════

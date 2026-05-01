@@ -430,6 +430,9 @@ export class Enemy {
       case 'ghost':    drawGhost(g, this, hpRatio); break;
       case 'knight':   drawKnight(g, this); break;
       case 'witch':    drawWitch(g, this); break;
+      case 'slime':    drawSlime(g, this); break;
+      case 'wraith':   drawWraith(g, this); break;
+      case 'vampire':  drawVampireMinor(g, this); break;
       case 'boss':     drawBoss(g, this); break;
       default:
         g.fillStyle(this.col, 1);
@@ -694,6 +697,81 @@ function drawWitch(g, e) {
   // crooked smile
   g.fillStyle(0x220011, 1);
   g.fillRect(-s * 0.18, -s * 0.05, s * 0.36, s * 0.05);
+}
+
+function drawSlime(g, e) {
+  const s = e.size;
+  const wob = Math.sin(e.bob * 0.6) * 1.5;
+  // shadow
+  g.fillStyle(0x000000, 0.4); g.fillEllipse(0, s + 2, s * 1.6, s * 0.4);
+  // body — soft jelly blob
+  g.fillStyle(e.col, 0.95);
+  g.fillEllipse(0, 1, s * 1.5 + wob, s * 1.2 - wob * 0.5);
+  g.fillStyle(0x66cc66, 0.7);
+  g.fillEllipse(0, 0, s * 1.3, s * 0.95);
+  // highlight
+  g.fillStyle(0xc8ffc8, 0.55);
+  g.fillEllipse(-s * 0.3, -s * 0.4, s * 0.4, s * 0.25);
+  // eyes
+  g.fillStyle(e.eyeCol ?? 0xffff00, 1);
+  g.fillCircle(-s * 0.3, -s * 0.1, 1.6);
+  g.fillCircle(s * 0.3, -s * 0.1, 1.6);
+  // mouth
+  g.lineStyle(1.2, 0x1a3a1a, 0.7);
+  g.beginPath(); g.moveTo(-3, s * 0.3); g.lineTo(0, s * 0.45); g.lineTo(3, s * 0.3); g.strokePath();
+}
+
+function drawWraith(g, e) {
+  const s = e.size;
+  const float = Math.sin(e.bob * 0.5) * 2;
+  // ethereal trail (3 fading silhouettes)
+  for (let i = 3; i >= 1; i--) {
+    g.fillStyle(0x8866cc, 0.15 * i);
+    g.fillCircle(0, float - i * 1.5, s + i * 1.5);
+  }
+  // body — wispy shape with tatters
+  g.fillStyle(e.col, 0.85);
+  g.fillCircle(0, float, s);
+  // ragged bottom
+  g.fillStyle(e.col, 0.65);
+  g.fillTriangle(-s * 0.7, float + s * 0.6, -s * 0.3, float + s * 1.4, -s * 0.05, float + s * 0.7);
+  g.fillTriangle(s * 0.7, float + s * 0.6, s * 0.3, float + s * 1.4, s * 0.05, float + s * 0.7);
+  // glowing eyes
+  g.fillStyle(e.eyeCol ?? 0xff00ff, 1);
+  g.fillCircle(-s * 0.35, float - s * 0.15, 2);
+  g.fillCircle(s * 0.35, float - s * 0.15, 2);
+  g.fillStyle(0xffffff, 0.7);
+  g.fillCircle(-s * 0.35, float - s * 0.15, 0.9);
+  g.fillCircle(s * 0.35, float - s * 0.15, 0.9);
+}
+
+function drawVampireMinor(g, e) {
+  const s = e.size;
+  // shadow
+  g.fillStyle(0x000000, 0.4); g.fillEllipse(0, s + 2, s * 1.4, s * 0.35);
+  // cape
+  g.fillStyle(0x2a0010, 0.95);
+  g.fillTriangle(-s * 1.1, -s * 0.2, 0, s * 1.0, s * 1.1, -s * 0.2);
+  // body
+  g.fillStyle(e.col, 1);
+  g.fillCircle(0, 0, s);
+  // shirt
+  g.fillStyle(0x000000, 0.6);
+  g.fillRect(-s * 0.4, 0, s * 0.8, s);
+  // pale face
+  g.fillStyle(0xe8d8d0, 1);
+  g.fillCircle(0, -s * 0.2, s * 0.65);
+  // dark hair
+  g.fillStyle(0x000000, 0.9);
+  g.fillEllipse(0, -s * 0.7, s * 1.3, s * 0.5);
+  // red eyes
+  g.fillStyle(e.eyeCol ?? 0xff0033, 1);
+  g.fillCircle(-s * 0.25, -s * 0.25, 1.5);
+  g.fillCircle(s * 0.25, -s * 0.25, 1.5);
+  // fangs
+  g.fillStyle(0xffffff, 1);
+  g.fillTriangle(-s * 0.18, s * 0.05, -s * 0.08, s * 0.05, -s * 0.13, s * 0.25);
+  g.fillTriangle(s * 0.18, s * 0.05, s * 0.08, s * 0.05, s * 0.13, s * 0.25);
 }
 
 function drawBoss(g, e) {

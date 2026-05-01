@@ -821,9 +821,12 @@ export default class GameScene extends Phaser.Scene {
         const types = ['bat'];
         if (this.elapsed >= 30) types.push('zombie');
         if (this.elapsed >= 60) types.push('skeleton');
+        if (this.elapsed >= 75) types.push('slime');
         if (this.elapsed >= 90) types.push('ghost');
         if (this.elapsed >= 120) types.push('knight');
+        if (this.elapsed >= 130) types.push('wraith');
         if (this.elapsed >= 150) types.push('witch');
+        if (this.elapsed >= 165) types.push('vampire');
         // Biome bias : 60% chance to favor unlocked biome enemies
         const favored = (this.biome?.favored || []).filter(t => types.includes(t));
         const pool = (favored.length > 0 && Math.random() < 0.6) ? favored : types;
@@ -873,6 +876,11 @@ export default class GameScene extends Phaser.Scene {
           playSfx('hit');
           this.shake(0.007, 130);
           this.comboCount = Math.floor((this.comboCount || 0) / 2);
+          // Vampire enemy drains HP from the player on contact (heals itself)
+          if (e.type === 'vampire') {
+            const drain = Math.min(8, pl.hp > 0 ? 8 : 0);
+            e.hp = Math.min(e.maxHp, e.hp + drain);
+          }
         }
       }
       // melee against minions & charmed (cooldown-gated to avoid 1-frame chunks)
@@ -921,6 +929,21 @@ export default class GameScene extends Phaser.Scene {
     this.updateChargedBolts(dt);
     this.updateBoomerangs(dt);
     this.updateIceRings(dt);
+
+    // Performance caps: drop oldest entities when arrays grow too large to
+    // keep GC pressure manageable in endless / horde modes.
+    const capArray = (arr, cap) => {
+      if (arr.length <= cap) return arr;
+      const drop = arr.length - cap;
+      for (let i = 0; i < drop; i++) {
+        const e = arr[i];
+        if (e?.destroy) e.destroy();
+      }
+      return arr.slice(drop);
+    };
+    this.eprojectiles = capArray(this.eprojectiles, 180);
+    this.orbs = capArray(this.orbs, 240);
+    this.projectiles = capArray(this.projectiles, 180);
 
     // Treasure: occasional fast streak across the screen
     this.treasureT -= dt;
@@ -1062,6 +1085,18 @@ export default class GameScene extends Phaser.Scene {
           if (this.comboCount > (this.comboPeak || 0)) this.comboPeak = this.comboCount;
           if (p.kh) p.hp = Math.min(p.maxHp, p.hp + 8);
           this.fxDeath(e.x, e.y, ETYPES[e.type]?.col ?? 0xffffff);
+          // Slime: split into 2 mini-slimes on death (only the original, not minis)
+          if (e.type === 'slime' && !e.miniSplit) {
+            for (let i = 0; i < 2; i++) {
+              const a = (i === 0 ? -1 : 1) * 0.8;
+              const child = new Enemy(this, e.x + Math.cos(a) * 14, e.y + Math.sin(a) * 14, 'slime', 0.4, 1.3, 0.6);
+              child.miniSplit = true;
+              child.size = Math.floor(child.size * 0.7);
+              child.maxHp = Math.max(8, child.maxHp);
+              child.hp = child.maxHp;
+              this.enemies.push(child);
+            }
+          }
           if (e.type === 'boss') {
             this.shake(0.012, 280);
             this.hitstop = 0.08;
@@ -3297,6 +3332,12 @@ export default class GameScene extends Phaser.Scene {
   fxDamage(x, y, dmg, isCrit = false) {
     const value = Math.round(dmg);
     if (value <= 0) return;
+    // Throttle: cap concurrent damage texts to avoid GC pressure on heavy AoE.
+    // Crits always pass; regulars are dropped when the cap is reached.
+    this._fxDmgActive = this._fxDmgActive || 0;
+    const cap = isCrit ? 200 : 70;
+    if (this._fxDmgActive >= cap) return;
+    this._fxDmgActive += 1;
     const t = this.add.text(x, y - 18, isCrit ? `${value}!` : `${value}`, {
       fontFamily: "'Cinzel', serif",
       fontSize: isCrit ? '22px' : '15px',
@@ -3312,7 +3353,7 @@ export default class GameScene extends Phaser.Scene {
       scale: isCrit ? 1.4 : 1,
       duration: 700,
       ease: 'Cubic.out',
-      onComplete: () => t.destroy(),
+      onComplete: () => { t.destroy(); this._fxDmgActive = Math.max(0, this._fxDmgActive - 1); },
     });
   }
 
