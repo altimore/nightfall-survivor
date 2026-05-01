@@ -670,6 +670,7 @@ export default class GameScene extends Phaser.Scene {
       comboT: this.comboT || 0,
       reviveLeft: p.metaReviveLeft || 0,
       endless: this.endless ? (this.endlessTier || 1) : 0,
+      runGold: this.runGold || 0,
       players: playersInfo,
       stats: {
         speed: p.speed,
@@ -1119,6 +1120,7 @@ export default class GameScene extends Phaser.Scene {
           const goldRushMul = (this.buffs?.goldRush || 0) > 0 ? 2 : 1;
           const goldGain = Math.max(1, Math.ceil((e.xpVal || 1) * 0.6 * (p.metaGoldMul || 1) * goldRushMul));
           this.runGold += goldGain;
+          this.fxGoldPop(e.x, e.y, goldGain);
           // Combo / killstreak: bump count and refresh the decay window.
           this.comboCount = (this.comboCount || 0) + 1;
           this.comboT = 4; // 4-second window
@@ -3351,6 +3353,24 @@ export default class GameScene extends Phaser.Scene {
         });
       });
     }
+  }
+
+  fxGoldPop(x, y, amount) {
+    const t = this.add.text(x, y - 6, `+${amount}💰`, {
+      fontFamily: "'Cinzel', serif",
+      fontSize: '12px',
+      color: '#ffd966',
+      stroke: '#1a0c00',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(40);
+    this.tweens.add({
+      targets: t,
+      y: y - 36,
+      alpha: 0,
+      duration: 700,
+      ease: 'Cubic.out',
+      onComplete: () => t.destroy(),
+    });
   }
 
   fxBanner(text, color = '#ffd966', size = 28) {

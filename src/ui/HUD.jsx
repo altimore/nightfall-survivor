@@ -50,6 +50,7 @@ export default function HUD({ muted, onToggleMute }) {
           }}>{s.endless ? `♾ TIER ${s.endless}` : fmt(timeLeft)}</div>
           <div style={{ fontSize: '0.82em', color: '#7b2fbe', letterSpacing: 1 }}>
             {t('hud.level')}{s.lv} · ☠ {s.kills}
+            {s.runGold > 0 && <span style={{ color: '#ffd966', marginLeft: '0.55em' }}>· 💰{s.runGold}</span>}
             {s.reviveLeft > 0 && <span style={{ color: '#c77dff', marginLeft: '0.55em' }}>· ⚱{s.reviveLeft}</span>}
           </div>
           {s.combo >= 5 && (

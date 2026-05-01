@@ -23,7 +23,16 @@ export default function App() {
   const [levelUp, setLevelUp] = useState({ lv: 1, choices: [] });
   const [startWeapon, setStartWeapon] = useState('dagger');
   const [startMode, setStartMode] = useState('normal');
-  const [character, setCharacter] = useState('vampire');
+  const [character, setCharacterRaw] = useState('vampire');
+  // Auto-switch the starter weapon when picking a character with a defined starterWeapon
+  const setCharacter = id => {
+    setCharacterRaw(id);
+    // Lazy import to avoid circular dep
+    import('./game/characters.js').then(({ CHARACTERS }) => {
+      const w = CHARACTERS[id]?.starterWeapon;
+      if (w) setStartWeapon(w);
+    });
+  };
   const [biome, setBiome] = useState('cemetery');
   const [numPlayers, setNumPlayers] = useState(1);
   const [bossAnnounce, setBossAnnounce] = useState(null);
