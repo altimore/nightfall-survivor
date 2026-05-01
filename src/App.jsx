@@ -241,6 +241,37 @@ export default function App() {
       {(phase === 'dead' || phase === 'victory') && (
         <EndScreen phase={phase} hud={hud} runStats={runStats} onRestart={start} onMenu={goMenu} />
       )}
+      {phase === 'playing' && (
+        <div style={{
+          position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 10px)', right: 12,
+          zIndex: 12, display: 'flex', gap: 8, pointerEvents: 'auto',
+        }}>
+          <button
+            onClick={() => { bus.emit('pause:set', true); setPhase('paused'); }}
+            onTouchStart={e => e.stopPropagation()}
+            tabIndex={-1}
+            aria-label="Pause"
+            style={{
+              padding: '0.4em 0.7em',
+              background: 'rgba(8,0,22,0.78)',
+              border: '1px solid #c77dff66', color: '#e0aaff',
+              fontSize: '1.2em', cursor: 'pointer', borderRadius: 6,
+              touchAction: 'manipulation',
+            }}>⏸</button>
+          <button
+            onClick={() => { bus.emit('pause:set', true); setPhase('inventory'); }}
+            onTouchStart={e => e.stopPropagation()}
+            tabIndex={-1}
+            aria-label="Inventaire"
+            style={{
+              padding: '0.4em 0.7em',
+              background: 'rgba(8,0,22,0.78)',
+              border: '1px solid #c77dff66', color: '#e0aaff',
+              fontSize: '1.2em', cursor: 'pointer', borderRadius: 6,
+              touchAction: 'manipulation',
+            }}>🎒</button>
+        </div>
+      )}
       {achievementQueue.length > 0 && (
         <div style={{
           position: 'absolute', right: 14, bottom: 14, zIndex: 35,

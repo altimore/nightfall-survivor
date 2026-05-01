@@ -369,21 +369,33 @@ export default class GameScene extends Phaser.Scene {
     this.emitHud();
   }
 
+  // Get the active player joystick state (player[0] in solo).
+  // We also mirror state into this.joystick for the on-screen visual drawer.
+  _activeJoystick() {
+    const pl = this.players?.[0];
+    return pl?.joystick || this.joystick;
+  }
+
   onPointerDown(p) {
     if (this.over || this.paused) return;
-    const j = this.joystick;
+    const j = this._activeJoystick();
+    if (!j) return;
     if (!j.active) {
       j.active = true; j.id = p.id;
       j.baseX = p.x; j.baseY = p.y;
       j.thumbX = p.x; j.thumbY = p.y;
       j.dx = 0; j.dy = 0;
+      // mirror to scene joystick (legacy visual)
+      this.joystick.active = true; this.joystick.id = p.id;
+      this.joystick.baseX = p.x; this.joystick.baseY = p.y;
+      this.joystick.thumbX = p.x; this.joystick.thumbY = p.y;
     } else if (p.id !== j.id) {
       this.tryDashFor(this.players[0]);
     }
   }
   onPointerMove(p) {
-    const j = this.joystick;
-    if (!j.active || p.id !== j.id) return;
+    const j = this._activeJoystick();
+    if (!j || !j.active || p.id !== j.id) return;
     const R = 55;
     const dx = p.x - j.baseX, dy = p.y - j.baseY;
     const dist = Math.hypot(dx, dy);
@@ -394,10 +406,14 @@ export default class GameScene extends Phaser.Scene {
     j.thumbY = j.baseY + ny * clamp;
     j.dx = nx * Math.min(dist / R, 1);
     j.dy = ny * Math.min(dist / R, 1);
+    // mirror to scene joystick visual
+    this.joystick.thumbX = j.thumbX; this.joystick.thumbY = j.thumbY;
+    this.joystick.dx = j.dx; this.joystick.dy = j.dy;
   }
   onPointerUp(p) {
-    const j = this.joystick;
-    if (p.id === j.id) { j.active = false; j.id = null; j.dx = 0; j.dy = 0; }
+    const j = this._activeJoystick();
+    if (j && p.id === j.id) { j.active = false; j.id = null; j.dx = 0; j.dy = 0; }
+    if (p.id === this.joystick.id) { this.joystick.active = false; this.joystick.id = null; this.joystick.dx = 0; this.joystick.dy = 0; }
   }
 
   spawnEnemy(typeName) {
