@@ -137,9 +137,52 @@ export default function Shop({ onClose }) {
           })}
         </div>
 
+        <GlobalStatsPanel state={state} />
+
         <div style={{ marginTop: '1.3em', textAlign: 'center', color: '#b69ad8', fontSize: '0.82em', letterSpacing: 2 }}>
           {t('shop.hint') || 'L\'or se gagne en tuant des ennemis · ÉCHAP / B pour fermer'}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function GlobalStatsPanel({ state }) {
+  const s = state?.stats;
+  if (!s || !s.totalRuns) return null;
+  const fmt = t => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  const items = [
+    { label: 'Runs joués',          value: s.totalRuns },
+    { label: 'Victoires',           value: s.totalVictories },
+    { label: 'Ennemis vaincus',     value: s.totalKills.toLocaleString() },
+    { label: 'Or total gagné',      value: `💰 ${s.totalGoldEarned.toLocaleString()}` },
+    { label: 'Évolutions débloquées', value: s.totalEvolutions },
+    { label: 'Meilleur temps',      value: fmt(s.bestTime || 0) },
+    { label: 'Plus gros score kills', value: s.bestKills.toLocaleString() },
+    { label: 'Plus gros combo',     value: `×${s.bestCombo}` },
+  ];
+  return (
+    <div style={{
+      marginTop: '1.4em',
+      background: 'rgba(8,0,22,0.78)',
+      border: '1px solid rgba(157,78,221,0.35)',
+      borderRadius: 6,
+      padding: '0.9em 1.1em',
+    }}>
+      <div style={{
+        color: '#9d4edd', fontSize: '0.91em', letterSpacing: 4,
+        textAlign: 'center', marginBottom: '0.7em',
+      }}>📊 STATISTIQUES</div>
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(13em, 1fr))',
+        gap: '0.45em 1em',
+      }}>
+        {items.map((x, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85em' }}>
+            <span style={{ color: '#b89ec4' }}>{x.label}</span>
+            <span style={{ color: '#e0aaff', fontWeight: 'bold' }}>{x.value}</span>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITE
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
 import { getOptions } from '../PhaserGame.js';
-import { applyMetaToPlayer, addGold } from '../meta.js';
+import { applyMetaToPlayer, addGold, recordRun } from '../meta.js';
 
 const BOSS_NAMES = [
   "L'Émissaire des Ténèbres",
@@ -126,6 +126,7 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#060011');
 
     this.bgGfx = this.add.graphics().setDepth(-10);
+    this.radarGfx = this.add.graphics().setDepth(50);
     this.orbitGfx = this.add.graphics().setDepth(14);
     this.joyGfx = this.add.graphics().setDepth(50);
 
@@ -419,6 +420,17 @@ export default class GameScene extends Phaser.Scene {
     if (goldEarned > 0) {
       totalGold = addGold(goldEarned);
     }
+    // Record stats for the run (kills, time, gold, combo, evolutions count, victory flag)
+    const evolutionsCount = this.players.reduce((acc, pl) => acc + ((pl.evolved instanceof Set) ? pl.evolved.size : 0), 0);
+    const victory = !!this.victoryClaimed;
+    recordRun({
+      kills: this.kills,
+      time: Math.floor(this.elapsed),
+      goldEarned,
+      combo: this.comboPeak || 0,
+      evolutions: evolutionsCount,
+      victory,
+    });
     bus.emit('runStats', {
       damageStats: { ...(this.damageStats || {}) },
       kills: this.kills,
@@ -426,6 +438,7 @@ export default class GameScene extends Phaser.Scene {
       goal: GOAL_TIME,
       goldEarned,
       goldTotal: totalGold,
+      bestCombo: this.comboPeak || 0,
       players: playersInfo,
     });
   }
@@ -945,6 +958,7 @@ export default class GameScene extends Phaser.Scene {
 
     // ── Render
     this.drawBg();
+    this.drawRadar();
     for (const t of this.trail) t.redraw();
     for (const tr of this.traps) tr.redraw();
     for (const n of this.nests) n.redraw();
@@ -3010,6 +3024,67 @@ export default class GameScene extends Phaser.Scene {
       }
     }
     return list;
+  }
+
+  // Mini-radar in the bottom-right corner showing nests, items and bosses
+  // off-screen relative to the main player. Center = player position.
+  drawRadar() {
+    const g = this.radarGfx;
+    g.clear();
+    const p = this.players?.find(pl => !pl.dead) || this.players?.[0];
+    if (!p) return;
+    const radius = 64;
+    const cx = this.W - radius - 14;
+    const cy = this.H - radius - 14;
+    const range = 900; // world distance shown in the radar
+    // Background disc
+    g.fillStyle(0x000000, 0.55);
+    g.fillCircle(cx, cy, radius);
+    g.lineStyle(1, 0x6a3a8a, 0.7);
+    g.strokeCircle(cx, cy, radius);
+    g.lineStyle(1, 0x6a3a8a, 0.25);
+    g.strokeCircle(cx, cy, radius * 0.66);
+    g.strokeCircle(cx, cy, radius * 0.33);
+    // Cross
+    g.lineStyle(1, 0x6a3a8a, 0.18);
+    g.beginPath(); g.moveTo(cx - radius, cy); g.lineTo(cx + radius, cy); g.strokePath();
+    g.beginPath(); g.moveTo(cx, cy - radius); g.lineTo(cx, cy + radius); g.strokePath();
+
+    const dot = (x, y, color, alpha = 1, r = 2.2) => {
+      const dx = x - p.x, dy = y - p.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 1) return;
+      const clamped = Math.min(dist, range);
+      const angle = Math.atan2(dy, dx);
+      const nr = (clamped / range) * (radius - 4);
+      g.fillStyle(color, alpha);
+      g.fillCircle(cx + Math.cos(angle) * nr, cy + Math.sin(angle) * nr, r);
+    };
+
+    // Player at center
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(cx, cy, 2.5);
+    // Nests = orange dots (with HP-tinted alpha)
+    for (const n of this.nests) {
+      const a = 0.4 + 0.6 * (n.hp / Math.max(1, n.maxHp));
+      dot(n.x, n.y, 0xff7733, a, 3);
+    }
+    // Items = green
+    for (const it of this.items) dot(it.x, it.y, 0x88ddff, 0.85, 2);
+    // Bosses = red, bigger, blinking
+    const blink = (Math.floor(this.elapsed * 4) & 1) ? 0.95 : 0.55;
+    for (const e of this.enemies) {
+      if (e.type === 'boss') dot(e.x, e.y, 0xff2244, blink, 4);
+      else if (e.type === 'treasure') dot(e.x, e.y, 0xffd966, 1, 3);
+    }
+    // Other players (multi-joueur) = their tint
+    if (this.players && this.players.length > 1) {
+      for (const pl of this.players) {
+        if (pl === p) continue;
+        if (pl.dead) continue;
+        dot(pl.x, pl.y, pl.tint, 0.95, 3);
+      }
+    }
   }
 
   drawBg() {

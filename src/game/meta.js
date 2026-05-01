@@ -20,19 +20,31 @@ export const META_UPGRADES = {
 const DEFAULT_STATE = {
   gold: 0,
   upgrades: {}, // upgradeId → owned level
+  stats: {
+    totalKills: 0,
+    totalRuns: 0,
+    totalVictories: 0,
+    totalGoldEarned: 0,
+    bestTime: 0,
+    bestKills: 0,
+    bestRunGold: 0,
+    bestCombo: 0,
+    totalEvolutions: 0,
+  },
 };
 
 export function loadMeta() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_STATE };
+    if (!raw) return { ...DEFAULT_STATE, stats: { ...DEFAULT_STATE.stats } };
     const parsed = JSON.parse(raw);
     return {
       gold: typeof parsed.gold === 'number' ? Math.max(0, parsed.gold) : 0,
       upgrades: typeof parsed.upgrades === 'object' && parsed.upgrades ? parsed.upgrades : {},
+      stats: { ...DEFAULT_STATE.stats, ...(parsed.stats || {}) },
     };
   } catch (_) {
-    return { ...DEFAULT_STATE };
+    return { ...DEFAULT_STATE, stats: { ...DEFAULT_STATE.stats } };
   }
 }
 
@@ -41,8 +53,27 @@ export function saveMeta(state) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       gold: Math.floor(state.gold || 0),
       upgrades: state.upgrades || {},
+      stats: state.stats || { ...DEFAULT_STATE.stats },
     }));
   } catch (_) {}
+}
+
+// Record a finished run's stats. `runData` shape: { kills, time, goldEarned, combo, victory, evolutions }
+export function recordRun(runData) {
+  const state = loadMeta();
+  const s = { ...DEFAULT_STATE.stats, ...(state.stats || {}) };
+  s.totalRuns += 1;
+  s.totalKills += runData.kills || 0;
+  s.totalGoldEarned += runData.goldEarned || 0;
+  s.totalEvolutions += runData.evolutions || 0;
+  if (runData.victory) s.totalVictories += 1;
+  if ((runData.time || 0) > s.bestTime) s.bestTime = runData.time;
+  if ((runData.kills || 0) > s.bestKills) s.bestKills = runData.kills;
+  if ((runData.goldEarned || 0) > s.bestRunGold) s.bestRunGold = runData.goldEarned;
+  if ((runData.combo || 0) > s.bestCombo) s.bestCombo = runData.combo;
+  state.stats = s;
+  saveMeta(state);
+  return s;
 }
 
 // Add gold and immediately persist.
