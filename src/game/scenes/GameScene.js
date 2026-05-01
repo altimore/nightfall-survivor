@@ -146,6 +146,7 @@ export default class GameScene extends Phaser.Scene {
 
     const initPlayer = (p, weapon) => {
       p.skills = { [weapon]: 1 };
+      p.character = charId;
       applyMetaToPlayer(p);
       // Character class bonuses applied AFTER meta to layer on top
       if (ch?.apply) ch.apply(p);

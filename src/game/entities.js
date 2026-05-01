@@ -68,6 +68,8 @@ export class Player {
     this.banished = new Set();
     this.gold = 0;
     this.tint = controller?.color ?? PLAYER_TINTS[id % PLAYER_TINTS.length];
+    this.character = 'vampire'; // overridden by GameScene with the chosen class
+    this.bob = Math.random() * Math.PI * 2;
     // Per-player weapon state
     this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, chargedBolt: 0, whip: 0, charm: 0, missile: 0, grenade: 0 };
     this.orbitAngle = 0;
@@ -94,6 +96,7 @@ export class Player {
     const g = this.gfx;
     g.clear();
     g.x = this.x; g.y = this.y;
+    this.bob = (this.bob || 0) + 0.06;
     if (this.dead) {
       // Tombe au sol avec barre de résurrection
       g.fillStyle(0x000000, 0.5);
@@ -121,22 +124,8 @@ export class Player {
     g.fillEllipse(0, 18, 30, 8);
     g.lineStyle(1.5, tint, 0.85);
     g.strokeEllipse(0, 18, 30, 8);
-    // Cape (triangle behind body)
-    g.fillStyle(0x1e0a3c, 0.85);
-    g.fillTriangle(-13, -2, 0, 22, 13, -2);
-    // Body / robe
-    g.fillStyle(0x3b1078, 1);
-    g.fillCircle(0, 2, 13);
-    // Hood
-    g.fillStyle(0x1e0a3c, 1);
-    g.fillCircle(0, -4, 11);
-    // Face
-    g.fillStyle(0xe0b896, 1);
-    g.fillCircle(0, -3, 7);
-    // Glowing eyes — tinted to player color
-    g.fillStyle(tint, 1);
-    g.fillCircle(-3, -4, 2);
-    g.fillCircle(3, -4, 2);
+    // Per-character body style
+    drawCharacterBody(g, this);
     // Dash ready ring
     if (this.canDash && this.dashCD <= 0) {
       g.lineStyle(1.5, 0x80ffdb, 0.45);
@@ -144,6 +133,184 @@ export class Player {
     }
   }
   destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
+// Character body drawers — one per CHARACTERS class.
+// Falls back to vampire (default) if unknown.
+// ────────────────────────────────────────
+function drawCharacterBody(g, p) {
+  const tint = p.tint;
+  const t = p.bob || 0;
+  switch (p.character) {
+    case 'witch':      drawWitchBody(g, tint, t); break;
+    case 'knight':     drawKnightBody(g, tint, t); break;
+    case 'rogue':      drawRogueBody(g, tint, t); break;
+    case 'necromancer':drawNecroBody(g, tint, t); break;
+    case 'paladin':    drawPaladinBody(g, tint, t); break;
+    case 'vampire':
+    default:           drawVampireBody(g, tint, t); break;
+  }
+}
+
+function drawVampireBody(g, tint, t) {
+  // Cape, robe mauve, capuche, yeux teintés (rendu original)
+  g.fillStyle(0x1e0a3c, 0.85);
+  g.fillTriangle(-13, -2, 0, 22, 13, -2);
+  g.fillStyle(0x3b1078, 1);
+  g.fillCircle(0, 2, 13);
+  g.fillStyle(0x1e0a3c, 1);
+  g.fillCircle(0, -4, 11);
+  g.fillStyle(0xe0b896, 1);
+  g.fillCircle(0, -3, 7);
+  g.fillStyle(tint, 1);
+  g.fillCircle(-3, -4, 2);
+  g.fillCircle(3, -4, 2);
+  // Petites canines
+  g.fillStyle(0xffffff, 0.95);
+  g.fillTriangle(-2.5, -1, -1.5, -1, -2, 1.5);
+  g.fillTriangle(1.5, -1, 2.5, -1, 2, 1.5);
+}
+
+function drawWitchBody(g, tint, t) {
+  // Robe bleu nuit, chapeau pointu courbé
+  g.fillStyle(0x1a1a48, 0.85);
+  g.fillTriangle(-12, 0, 0, 22, 12, 0);
+  g.fillStyle(0x2a2a78, 1);
+  g.fillCircle(0, 2, 12);
+  // Visage pâle
+  g.fillStyle(0xd8b8a8, 1);
+  g.fillCircle(0, -3, 7);
+  g.fillStyle(tint, 1);
+  g.fillCircle(-3, -4, 1.8);
+  g.fillCircle(3, -4, 1.8);
+  // Chapeau pointu (triangle + bord)
+  g.fillStyle(0x1a0028, 1);
+  g.fillEllipse(0, -10, 18, 4); // bord
+  g.fillTriangle(-7, -10, 7, -10, 1, -22);
+  // étoile sur le chapeau
+  g.fillStyle(0xffe066, 0.9);
+  g.fillCircle(2, -16, 1.4);
+}
+
+function drawKnightBody(g, tint, t) {
+  // Armure plate grise, casque avec visière, bouclier
+  g.fillStyle(0x4a4a55, 1);
+  g.fillRoundedRect(-10, -2, 20, 18, 6); // torse
+  // détail plastron
+  g.lineStyle(1.5, 0x222230, 0.9);
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 14); g.strokePath();
+  // Casque
+  g.fillStyle(0x6a6a78, 1);
+  g.fillRoundedRect(-9, -16, 18, 16, 6);
+  // visière (bande noire avec fente)
+  g.fillStyle(0x101018, 1);
+  g.fillRect(-8, -10, 16, 4);
+  g.fillStyle(tint, 1);
+  g.fillRect(-5, -9, 3, 1.5);
+  g.fillRect(2, -9, 3, 1.5);
+  // crête sommet
+  g.fillStyle(tint, 0.9);
+  g.fillTriangle(-3, -16, 3, -16, 0, -22);
+  // bouclier épaule gauche (cercle)
+  g.fillStyle(0x886a3a, 1);
+  g.fillCircle(-12, 4, 5);
+  g.lineStyle(1, 0x4a3010, 1);
+  g.strokeCircle(-12, 4, 5);
+}
+
+function drawRogueBody(g, tint, t) {
+  // Capuche basse, écharpe, agile
+  g.fillStyle(0x18181f, 0.9);
+  g.fillTriangle(-12, 0, 0, 22, 12, 0); // cape sombre
+  g.fillStyle(0x22222a, 1);
+  g.fillCircle(0, 2, 12);
+  // Capuche très large qui couvre les yeux
+  g.fillStyle(0x0a0a14, 1);
+  g.fillCircle(0, -5, 12);
+  g.fillRect(-12, -7, 24, 8);
+  // Yeux brillants dans l'ombre
+  g.fillStyle(tint, 1);
+  g.fillCircle(-2.5, -3, 1.4);
+  g.fillCircle(2.5, -3, 1.4);
+  // Écharpe / masque sous la capuche
+  g.fillStyle(0x6a2a3a, 1);
+  g.fillRect(-6, 0, 12, 4);
+  // Dague à la ceinture
+  g.fillStyle(0xc0c0c0, 1);
+  g.fillTriangle(8, 8, 12, 8, 10, 16);
+  g.fillStyle(0x4a3010, 1);
+  g.fillRect(8.5, 6.5, 3, 2);
+}
+
+function drawNecroBody(g, tint, t) {
+  // Robe noire avec capuche, crâne flottant, fumée violette
+  // fumée
+  const sm = 0.4 + 0.2 * Math.sin(t * 2);
+  g.fillStyle(0x4a1a8a, sm * 0.5);
+  g.fillCircle(-6 + Math.sin(t) * 3, -16, 5);
+  g.fillCircle(7 + Math.cos(t) * 3, -18, 6);
+  g.fillCircle(0 + Math.sin(t * 0.7) * 2, -22, 4);
+  // Cape
+  g.fillStyle(0x000000, 0.95);
+  g.fillTriangle(-14, -2, 0, 22, 14, -2);
+  // Robe
+  g.fillStyle(0x0a0014, 1);
+  g.fillCircle(0, 2, 13);
+  // Capuche déchirée
+  g.fillStyle(0x000000, 1);
+  g.fillCircle(0, -4, 11);
+  g.fillTriangle(-12, -3, -8, -10, -5, -3);
+  g.fillTriangle(12, -3, 8, -10, 5, -3);
+  // Crâne au lieu d'un visage
+  g.fillStyle(0xe8e0d0, 1);
+  g.fillCircle(0, -3, 6);
+  g.fillStyle(0x0a0014, 1);
+  g.fillCircle(-2, -3, 1.6);
+  g.fillCircle(2, -3, 1.6);
+  // Lueur dans les orbites
+  g.fillStyle(tint, 0.9);
+  g.fillCircle(-2, -3, 0.9);
+  g.fillCircle(2, -3, 0.9);
+  // dents
+  g.fillStyle(0xc0b8a8, 1);
+  g.fillRect(-2.5, 0.5, 1, 1.5);
+  g.fillRect(-0.5, 0.5, 1, 1.5);
+  g.fillRect(1.5, 0.5, 1, 1.5);
+}
+
+function drawPaladinBody(g, tint, t) {
+  // Armure dorée, halo lumineux, croix
+  // halo
+  const halo = 0.55 + 0.15 * Math.sin(t * 0.3);
+  g.fillStyle(0xffe066, halo * 0.45);
+  g.fillCircle(0, -10, 14);
+  g.lineStyle(1.5, 0xfff0aa, halo * 0.85);
+  g.strokeCircle(0, -10, 14);
+  // Cape blanche
+  g.fillStyle(0xe8e0d0, 0.85);
+  g.fillTriangle(-12, -2, 0, 22, 12, -2);
+  // Armure plastron doré
+  g.fillStyle(0xc89030, 1);
+  g.fillRoundedRect(-11, -2, 22, 18, 5);
+  g.fillStyle(0xe8b040, 1);
+  g.fillRoundedRect(-9, -1, 18, 8, 4);
+  // Croix sur le plastron
+  g.fillStyle(0xfff0aa, 1);
+  g.fillRect(-1, 1, 2, 10);
+  g.fillRect(-4, 4, 8, 2);
+  // Casque doré
+  g.fillStyle(0xd8a040, 1);
+  g.fillCircle(0, -6, 11);
+  // visage
+  g.fillStyle(0xe0b896, 1);
+  g.fillCircle(0, -4, 6);
+  g.fillStyle(tint, 1);
+  g.fillCircle(-2.5, -5, 1.5);
+  g.fillCircle(2.5, -5, 1.5);
+  // plume sur le casque
+  g.fillStyle(tint, 0.9);
+  g.fillTriangle(-2, -16, 2, -16, 0, -22);
 }
 
 // ────────────────────────────────────────

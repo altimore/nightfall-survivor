@@ -7,6 +7,9 @@ export const SKILLS = {
   nova:      { name:"Nova de Feu",        icon:"🔥", color:"#ff6b35", type:"weapon",  max:5, desc:["Explosion autour du joueur toutes les 2s","Rayon +40%","Dégâts ×1.5","Cadence ×1.5","Rayon ×2, repousse les ennemis"] },
   lightning: { name:"Foudre Maudite",     icon:"⚡", color:"#ffe066", type:"weapon",  max:5, desc:["Frappe l'ennemi le plus proche/1.5s","Rebondit sur 1 ennemi","Cadence ×1.5","Rebondit sur 3 ennemis","Chaîne illimitée"] },
   chargedBolt:{ name:"Décharge",           icon:"💥", color:"#a0d8ff", type:"weapon",  max:5, desc:["Lance 3 disques électriques en éventail · zigzag","5 disques · cadence ×1.2","6 disques · dégâts +30%","8 disques · portée +30%","10 disques · perforants · dégâts +50%"] },
+  bow:       { name:"Arc Spectral",        icon:"🏹", color:"#88ff88", type:"weapon",  max:5, desc:["Tire une flèche perforante toutes les 1.5s","Cadence ×1.3","2 flèches simultanées","Cadence ×1.6 · dégâts +30%","3 flèches · explose à l'impact"] },
+  boomerang: { name:"Lame Boomerang",      icon:"🪃", color:"#ffaa44", type:"weapon",  max:5, desc:["Lance une lame qui revient · 2 hits","2 lames opposées","Cadence ×1.3 · dégâts +30%","3 lames · portée +30%","4 lames · explose au retour"] },
+  iceRing:   { name:"Cercle Glacial",      icon:"❄️", color:"#88ddff", type:"weapon",  max:5, desc:["Anneau gelé s'étend toutes les 3s","Rayon +25% · gèle 1s","Cadence ×1.3 · dégâts +30%","Double pulse glaciaire","Triple pulse · gèle 2s · dégâts ×1.5"] },
   orbit:     { name:"Orbe Maudite",       icon:"💫", color:"#b894ff", type:"weapon",  max:5, desc:["1 orbe en orbite autour du joueur","2 orbes opposées","3 orbes · dégâts +20%","4 orbes · rayon étendu","5 orbes · rotation ×1.5 · dégâts +50%"] },
   trail:     { name:"Sentier Maudit",     icon:"☠️", color:"#88dd33", type:"weapon",  max:5, desc:["Laisse une traînée toxique derrière le joueur","Traînée plus dense","Mares plus larges · durent 3s","Dégâts +50%","Mares géantes · 4s · dégâts ×2"] },
   whip:      { name:"Fouet d'Ombre",      icon:"🪢", color:"#d4a4ff", type:"weapon",  max:5, desc:["Frappe en zone rectangulaire devant le joueur","Portée +30%","Double frappe (gauche + droite)","Portée +50% · dégâts +30%","Frappe les 4 directions cardinales"] },
@@ -67,6 +70,45 @@ export const DAMAGE_COLORS = {
   dark:     '#b894ff',
   holy:     '#ffd966',
 };
+
+// ════════════════════════════════════════
+// Biomes (maps) — visual theme + favored enemy pool
+// ════════════════════════════════════════
+export const BIOMES = {
+  cemetery: {
+    name: 'Cimetière',
+    icon: '🪦',
+    bgColor: 0x0a0014,
+    gridColor: 0x3c005f,
+    accent: 0x7b2fbe,
+    favored: ['zombie', 'skeleton', 'ghost', 'knight'],
+  },
+  forest: {
+    name: 'Forêt Maudite',
+    icon: '🌲',
+    bgColor: 0x041007,
+    gridColor: 0x143a1a,
+    accent: 0x3a8a4a,
+    favored: ['bat', 'ghost', 'witch'],
+  },
+  dungeon: {
+    name: 'Donjon Oublié',
+    icon: '🏰',
+    bgColor: 0x1a0d04,
+    gridColor: 0x4a2a14,
+    accent: 0xc88040,
+    favored: ['skeleton', 'knight', 'zombie'],
+  },
+  abyss: {
+    name: 'Abysses',
+    icon: '🌌',
+    bgColor: 0x040014,
+    gridColor: 0x18083a,
+    accent: 0x4438aa,
+    favored: ['ghost', 'witch', 'bat'],
+  },
+};
+export const BIOME_LIST = Object.keys(BIOMES);
 
 // ════════════════════════════════════════
 // Game modes — global modifiers applied at scene start
