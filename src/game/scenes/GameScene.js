@@ -394,6 +394,12 @@ export default class GameScene extends Phaser.Scene {
       if (this.buffs[k] > 0) this.buffs[k] -= dt;
       if (this.buffs[k] <= 0) this.buffs[k] = 0;
     }
+    // Elemental override (one active at a time, priority Fire > Ice > Lightning > Poison)
+    if (this.buffs.elementFire > 0) this.elementOverride = 'fire';
+    else if (this.buffs.elementIce > 0) this.elementOverride = 'ice';
+    else if (this.buffs.elementLightning > 0) this.elementOverride = 'lightning';
+    else if (this.buffs.elementPoison > 0) this.elementOverride = 'poison';
+    else this.elementOverride = null;
 
     // ── Movement
     let mx = this.joystick.dx || 0;

@@ -119,6 +119,7 @@ export class Enemy {
 
   takeDamage(amount, type = 'physical', scene) {
     if (this.hp <= 0) return 0;
+    if (type === 'physical' && scene?.elementOverride) type = scene.elementOverride;
     const r = this.resists[type] ?? this.resists.all ?? 1;
     const final = amount * r;
     if (final <= 0) return 0;

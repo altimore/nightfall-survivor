@@ -105,8 +105,15 @@ export const ITEMS = {
   magnet:    { name:'Aimant arcane',    icon:'🌀', col:'#ffb347', colNum:0xffb347, desc:'Attire tous les XP orbes' },
   nuke:      { name:'Sceau du Néant',    icon:'☢️', col:'#ff4400', colNum:0xff4400, desc:'Tue tous les ennemis à l\'écran' },
   vacuum:    { name:'Aspiration arcane', icon:'🌟', col:'#88ddff', colNum:0x88ddff, desc:'Ramasse toutes les orbes XP' },
+  elementFire:     { name:"Cœur de braise",   icon:'🔥', col:'#ff7733', colNum:0xff7733, desc:'Attaques physiques → feu · 12s' },
+  elementIce:      { name:'Souffle glacial',  icon:'❄️', col:'#88ccff', colNum:0x88ccff, desc:'Attaques physiques → glace · 12s' },
+  elementLightning:{ name:"Charge d'orage",   icon:'⚡', col:'#ffe066', colNum:0xffe066, desc:'Attaques physiques → foudre · 12s' },
+  elementPoison:   { name:'Toxine spectrale', icon:'🧪', col:'#88dd33', colNum:0x88dd33, desc:'Attaques physiques → poison · 12s' },
 };
-export const ITEM_DURATIONS = { heal:0, megaheal:0, regen:6, rage:8, damageBuff:10, shield:5, freeze:6, speed:8, magnet:0, nuke:0, vacuum:0 };
+export const ITEM_DURATIONS = {
+  heal:0, megaheal:0, regen:6, rage:8, damageBuff:10, shield:5, freeze:6, speed:8, magnet:0, nuke:0, vacuum:0,
+  elementFire:12, elementIce:12, elementLightning:12, elementPoison:12,
+};
 export const ITEM_KEYS = Object.keys(ITEMS);
 
 // ════════════════════════════════════════
