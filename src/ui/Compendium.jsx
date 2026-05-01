@@ -158,12 +158,16 @@ function EnemyCard({ id, et, t }) {
       padding: '0.8em 1em',
       boxShadow: `0 0 12px ${hexToRgb(et.col)}22`,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5em', marginBottom: '0.4em' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6em', marginBottom: '0.4em' }}>
         <div style={{
-          width: '0.95em', height: '0.95em', borderRadius: '50%',
-          background: hexToRgb(et.col),
-          boxShadow: `0 0 6px ${hexToRgb(et.col)}`,
-        }}/>
+          width: '2.4em', height: '2.4em', borderRadius: 8,
+          background: `radial-gradient(circle at 35% 30%, ${hexToRgb(et.col)}80, ${hexToRgb(et.col)}30 60%, rgba(0,0,0,0.4))`,
+          border: `1px solid ${hexToRgb(et.col)}80`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '1.5em',
+          boxShadow: `0 0 10px ${hexToRgb(et.col)}55`,
+          flexShrink: 0,
+        }}>{et.icon}</div>
         <span style={{ color: hexToRgb(et.col), fontSize: '1em', letterSpacing: 1 }}>{et.label}</span>
         {isBoss && <span style={{ color: '#ff4400', fontSize: '0.82em', letterSpacing: 2, marginLeft: 'auto' }}>BOSS</span>}
       </div>

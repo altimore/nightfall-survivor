@@ -26,19 +26,19 @@ export const SKILLS = {
 // Damage type multipliers per enemy. 1 = normal, 0 = immune, <1 = resistant, >1 = weak.
 // Use `all` as a fallback (e.g. boss takes 0.75× all damage by default).
 export const ETYPES = {
-  bat:      { label:"Chauve-Souris", col:0x6a0dad, eyeCol:0xffff00, size:6,  baseHp:10,  baseSpd:58, dmg:4,  xpVal:1, behavior:"wavy",   wave:0,
+  bat:      { label:"Chauve-Souris", icon:"🦇", col:0x6a0dad, eyeCol:0xffff00, size:6,  baseHp:10,  baseSpd:58, dmg:4,  xpVal:1, behavior:"wavy",   wave:0,
               resists: { ice: 0.6, poison: 1.4, lightning: 1.3 } },
-  zombie:   { label:"Zombie",        col:0x3a6b20, eyeCol:0xff8800, size:12, baseHp:50,  baseSpd:24, dmg:8,  xpVal:3, behavior:"direct",  wave:30,
+  zombie:   { label:"Zombie",        icon:"🧟", col:0x3a6b20, eyeCol:0xff8800, size:12, baseHp:50,  baseSpd:24, dmg:8,  xpVal:3, behavior:"direct",  wave:30,
               resists: { fire: 1.5, poison: 0, holy: 1.3 } },
-  skeleton: { label:"Squelette",     col:0xc8c8b0, eyeCol:0xff0000, size:10, baseHp:35,  baseSpd:32, dmg:6,  xpVal:4, behavior:"ranged",  wave:60,
+  skeleton: { label:"Squelette",     icon:"💀", col:0xc8c8b0, eyeCol:0xff0000, size:10, baseHp:35,  baseSpd:32, dmg:6,  xpVal:4, behavior:"ranged",  wave:60,
               resists: { physical: 0.6, ice: 1.2, holy: 1.5, poison: 0.3 } },
-  ghost:    { label:"Fantôme",       col:0x8888ff, eyeCol:0x00ffff, size:11, baseHp:28,  baseSpd:28, dmg:10, xpVal:4, behavior:"phase",   wave:90,
+  ghost:    { label:"Fantôme",       icon:"👻", col:0x8888ff, eyeCol:0x00ffff, size:11, baseHp:28,  baseSpd:28, dmg:10, xpVal:4, behavior:"phase",   wave:90,
               resists: { physical: 0.4, ice: 0.7, holy: 1.7, poison: 0.5 } },
-  knight:   { label:"Chevalier",     col:0x8b4513, eyeCol:0xff0000, size:15, baseHp:100, baseSpd:18, dmg:18, xpVal:7, behavior:"charge",  wave:120,
+  knight:   { label:"Chevalier",     icon:"🛡️", col:0x8b4513, eyeCol:0xff0000, size:15, baseHp:100, baseSpd:18, dmg:18, xpVal:7, behavior:"charge",  wave:120,
               resists: { physical: 0.7, ice: 0.6, lightning: 1.4 } },
-  witch:    { label:"Sorcière",      col:0x9932cc, eyeCol:0x00ff00, size:10, baseHp:40,  baseSpd:38, dmg:7,  xpVal:5, behavior:"kite",    wave:150,
+  witch:    { label:"Sorcière",      icon:"🧙‍♀️", col:0x9932cc, eyeCol:0x00ff00, size:10, baseHp:40,  baseSpd:38, dmg:7,  xpVal:5, behavior:"kite",    wave:150,
               resists: { fire: 0, dark: 0.7, holy: 1.3 } },
-  boss:     { label:"BOSS",          col:0x8b0000, eyeCol:0xffff00, size:28, baseHp:600, baseSpd:26, dmg:22, xpVal:60, behavior:"boss",   wave:-1,
+  boss:     { label:"BOSS",          icon:"👹", col:0x8b0000, eyeCol:0xffff00, size:28, baseHp:600, baseSpd:26, dmg:22, xpVal:60, behavior:"boss",   wave:-1,
               resists: { all: 0.75 } },
 };
 

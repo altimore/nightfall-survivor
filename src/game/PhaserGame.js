@@ -17,6 +17,6 @@ export function createGame(parent) {
     },
     scene: [GameScene],
     fps: { target: 60, forceSetTimeOut: false },
-    input: { activePointers: 3 },
+    input: { activePointers: 3, gamepad: true },
   });
 }
