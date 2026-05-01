@@ -586,6 +586,41 @@ export class TrailTile {
 }
 
 // ────────────────────────────────────────
+// Homing missile — locks on a target and steers toward it, AoE on impact.
+// ────────────────────────────────────────
+export class HomingMissile {
+  constructor(scene, x, y, target, dmg, aoe) {
+    this.gfx = scene.add.graphics().setDepth(15);
+    this.x = x; this.y = y;
+    this.target = target;
+    this.dmg = dmg;
+    this.aoe = aoe;
+    this.life = 4;
+    this.angle = 0;
+    this.speed = 280;
+    this.turnRate = 7;
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    g.rotation = this.angle;
+    // tail flame
+    g.fillStyle(0xff8844, 0.5);
+    g.fillCircle(-12, 0, 3);
+    g.fillStyle(0xffe066, 0.85);
+    g.fillTriangle(-13, -1.7, -6, 0, -13, 1.7);
+    // body
+    g.fillStyle(0xff4400, 1);
+    g.fillTriangle(-7, -2.5, 9, 0, -7, 2.5);
+    g.fillStyle(0xffaa66, 1);
+    g.fillCircle(0, 0, 2);
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
 // Spectral minion — friendly summoned wisp that hunts the closest enemy.
 // ────────────────────────────────────────
 export class Minion {

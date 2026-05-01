@@ -145,6 +145,7 @@ export default function App() {
           inset: 0,
           background: '#060011',
           touchAction: 'none',
+          pointerEvents: phase === 'playing' ? 'auto' : 'none',
         }}
       />
       {phase !== 'menu' && (

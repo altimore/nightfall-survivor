@@ -125,7 +125,7 @@ export default function HUD({ muted, onToggleMute }) {
           display: 'flex', gap: '0.45em', flexWrap: 'wrap', alignItems: 'center',
           padding: '0.36em 0.9em', borderTop: '1px solid rgba(90,24,154,.18)',
         }}>
-          <span style={{ fontSize: '0.82em', color: '#3c096c', letterSpacing: 2, marginRight: '0.36em' }}>{t('hud.powers')}</span>
+          <span style={{ fontSize: '0.82em', color: '#b69ad8', letterSpacing: 2, marginRight: '0.36em' }}>{t('hud.powers')}</span>
           {skillEntries.map(([id, lv]) => {
             const sk = SKILLS[id];
             if (!sk) return null;
