@@ -221,9 +221,9 @@ export default class GameScene extends Phaser.Scene {
 
   get W() { return this.scale.width; }
   get H() { return this.scale.height; }
-  // Virtual world is 2× viewport so players can wander beyond the spawn area.
-  get WORLD_W() { return this.scale.width * 2; }
-  get WORLD_H() { return this.scale.height * 2; }
+  // Virtual world is 2.5× viewport so players can wander beyond the spawn area.
+  get WORLD_W() { return this.scale.width * 2.5; }
+  get WORLD_H() { return this.scale.height * 2.5; }
 
   create() {
     this.cameras.main.setBackgroundColor('#060011');
