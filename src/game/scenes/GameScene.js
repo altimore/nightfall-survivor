@@ -487,11 +487,13 @@ export default class GameScene extends Phaser.Scene {
 
   spawnTreasure() {
     const side = Math.floor(Math.random() * 4);
+    const cam = this.cameras.main;
+    const sx = cam.scrollX, sy = cam.scrollY, w = this.W, h = this.H;
     let x, y, dx, dy;
-    if (side === 0) { x = -30; y = 80 + Math.random() * (this.H - 160); dx = 1; dy = (Math.random() - 0.5) * 0.4; }
-    else if (side === 1) { x = this.W + 30; y = 80 + Math.random() * (this.H - 160); dx = -1; dy = (Math.random() - 0.5) * 0.4; }
-    else if (side === 2) { x = 80 + Math.random() * (this.W - 160); y = -30; dx = (Math.random() - 0.5) * 0.4; dy = 1; }
-    else { x = 80 + Math.random() * (this.W - 160); y = this.H + 30; dx = (Math.random() - 0.5) * 0.4; dy = -1; }
+    if (side === 0) { x = sx - 30; y = sy + 80 + Math.random() * (h - 160); dx = 1; dy = (Math.random() - 0.5) * 0.4; }
+    else if (side === 1) { x = sx + w + 30; y = sy + 80 + Math.random() * (h - 160); dx = -1; dy = (Math.random() - 0.5) * 0.4; }
+    else if (side === 2) { x = sx + 80 + Math.random() * (w - 160); y = sy - 30; dx = (Math.random() - 0.5) * 0.4; dy = 1; }
+    else { x = sx + 80 + Math.random() * (w - 160); y = sy + h + 30; dx = (Math.random() - 0.5) * 0.4; dy = -1; }
     const len = Math.hypot(dx, dy) || 1;
     dx /= len; dy /= len;
     const e = new Enemy(this, x, y, 'treasure', 1, 1, 1);
@@ -502,10 +504,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   spawnObstacle() {
+    const cam = this.cameras.main;
+    const sx = cam.scrollX, sy = cam.scrollY;
     let x, y, tries = 0;
     do {
-      x = 80 + Math.random() * (this.W - 160);
-      y = 80 + Math.random() * (this.H - 160);
+      x = sx + 80 + Math.random() * (this.W - 160);
+      y = sy + 80 + Math.random() * (this.H - 160);
       tries++;
     } while (Math.hypot(x - this.player.x, y - this.player.y) < 140 && tries < 12);
     this.obstacles.push(new Obstacle(this, x, y));
@@ -513,10 +517,12 @@ export default class GameScene extends Phaser.Scene {
 
   spawnItem() {
     const type = ITEM_KEYS[Math.floor(Math.random() * ITEM_KEYS.length)];
+    const cam = this.cameras.main;
+    const sx = cam.scrollX, sy = cam.scrollY;
     let x, y, tries = 0;
     do {
-      x = 60 + Math.random() * (this.W - 120);
-      y = 60 + Math.random() * (this.H - 120);
+      x = sx + 60 + Math.random() * (this.W - 120);
+      y = sy + 60 + Math.random() * (this.H - 120);
       tries++;
     } while (Math.hypot(x - this.player.x, y - this.player.y) < 120 && tries < 10);
     this.items.push(new Item(this, x, y, type));
@@ -1355,8 +1361,8 @@ export default class GameScene extends Phaser.Scene {
       p.y += my * p.speed * speedBoost * dt;
     }
     if (p.dashCD > 0) p.dashCD -= dt;
-    p.x = Math.max(15, Math.min(this.W - 15, p.x));
-    p.y = Math.max(15, Math.min(this.H - 15, p.y));
+    p.x = Math.max(15, Math.min(this.WORLD_W - 15, p.x));
+    p.y = Math.max(15, Math.min(this.WORLD_H - 15, p.y));
     p.iframes = Math.max(0, p.iframes - dt);
     const totalRegen = (p.regen || 0) + regenBuff;
     if (totalRegen > 0) p.hp = Math.min(p.maxHp, p.hp + totalRegen * dt);
@@ -2717,11 +2723,13 @@ export default class GameScene extends Phaser.Scene {
     this.nestSpawnT -= dt;
     if (this.nestSpawnT <= 0 && this.nests.length < 4) {
       this.nestSpawnT = 30 + Math.random() * 18;
-      // Find a position away from the player
+      // Find a position away from the player, within the visible viewport
+      const cam = this.cameras.main;
+      const sx = cam.scrollX, sy = cam.scrollY;
       let nx = 0, ny = 0, tries = 0;
       do {
-        nx = 80 + Math.random() * (this.W - 160);
-        ny = 80 + Math.random() * (this.H - 160);
+        nx = sx + 80 + Math.random() * (this.W - 160);
+        ny = sy + 80 + Math.random() * (this.H - 160);
         tries++;
       } while (Math.hypot(nx - p.x, ny - p.y) < 220 && tries < 12);
       // Pick an enemy type unlocked by current elapsed time (per WAVES schedule).
