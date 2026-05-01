@@ -1,8 +1,119 @@
 import Phaser from 'phaser';
 import { GOAL_TIME } from '../config.js';
-import { Player, Enemy, Projectile } from '../entities.js';
-import { initAudio, playSfx, startMusic, stopMusic, setMuted } from '../audio.js';
+import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile } from '../entities.js';
+import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES } from '../data.js';
+import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
+import { getOptions } from '../PhaserGame.js';
+
+const BOSS_NAMES = [
+  "L'Émissaire des Ténèbres",
+  "Maître de la Nuit Éternelle",
+  "Seigneur Funeste",
+  "L'Ombre du Néant",
+  "Aberration Mortuaire",
+  "Hérésiarque Maudit",
+  "Régent des Sépultures",
+  "Carcassemort, le Premier",
+  "Le Calice de Sang",
+  "Veuve aux Mille Yeux",
+];
+
+// ────────────────────────────────────────
+// Background decoration drawers — cemetery / haunted ruins style.
+// Each takes the bg Graphics and draws once around (cx, cy).
+// ────────────────────────────────────────
+function drawDecor(g, cx, cy, type, hash) {
+  const variant = (hash >>> 16) & 0xff;
+  switch (type) {
+    case 0: drawCross(g, cx, cy, variant); break;
+    case 1: drawTombstone(g, cx, cy, variant); break;
+    case 2: drawDeadTree(g, cx, cy, variant); break;
+    default: drawStones(g, cx, cy, variant);
+  }
+}
+
+function drawCross(g, cx, cy, v) {
+  const tilt = ((v & 0x1f) - 16) * 0.012;
+  const h = 28 + (v & 0x07);
+  // ground shadow
+  g.fillStyle(0x000000, 0.35);
+  g.fillEllipse(cx, cy + h * 0.7, h * 0.9, h * 0.25);
+  // post
+  g.fillStyle(0x2a1810, 0.55);
+  g.save?.();
+  // simple tilt approximated by drawing slightly skewed rect
+  g.fillRect(cx - 2, cy - h, 4, h);
+  // crossbar
+  g.fillRect(cx - 12, cy - h * 0.65, 24, 4);
+  // small decoration knot
+  g.fillStyle(0x3a2418, 0.5);
+  g.fillCircle(cx, cy - h * 0.65 + 2, 2);
+}
+
+function drawTombstone(g, cx, cy, v) {
+  const w = 26 + (v & 0x07);
+  const h = 32 + ((v >> 3) & 0x07);
+  // shadow
+  g.fillStyle(0x000000, 0.4);
+  g.fillEllipse(cx, cy + 6, w * 1.1, w * 0.3);
+  // back panel (darker)
+  g.fillStyle(0x1a1a25, 0.7);
+  g.fillRoundedRect(cx - w / 2, cy - h, w, h, w * 0.45);
+  // front panel (mid grey, slight offset)
+  g.fillStyle(0x3a3a48, 0.55);
+  g.fillRoundedRect(cx - w / 2 + 2, cy - h + 2, w - 4, h - 6, (w - 4) * 0.45);
+  // engraved cross
+  g.fillStyle(0x12121c, 0.55);
+  g.fillRect(cx - 1.5, cy - h * 0.75, 3, h * 0.35);
+  g.fillRect(cx - 6, cy - h * 0.6, 12, 3);
+}
+
+function drawDeadTree(g, cx, cy, v) {
+  const trunkH = 38 + (v & 0x0f);
+  // shadow
+  g.fillStyle(0x000000, 0.35);
+  g.fillEllipse(cx, cy + 4, 18, 5);
+  // trunk
+  g.fillStyle(0x1f1208, 0.7);
+  g.fillRect(cx - 2.5, cy - trunkH, 5, trunkH);
+  // branches
+  g.lineStyle(2, 0x2a1810, 0.7);
+  g.beginPath();
+  g.moveTo(cx, cy - trunkH * 0.5);
+  g.lineTo(cx - 14, cy - trunkH * 0.85);
+  g.lineTo(cx - 18, cy - trunkH * 0.7);
+  g.strokePath();
+  g.beginPath();
+  g.moveTo(cx, cy - trunkH * 0.65);
+  g.lineTo(cx + 16, cy - trunkH * 0.95);
+  g.lineTo(cx + 22, cy - trunkH * 0.75);
+  g.strokePath();
+  g.beginPath();
+  g.moveTo(cx, cy - trunkH * 0.85);
+  g.lineTo(cx - 8, cy - trunkH * 1.1);
+  g.strokePath();
+  g.beginPath();
+  g.moveTo(cx, cy - trunkH * 0.95);
+  g.lineTo(cx + 10, cy - trunkH * 1.15);
+  g.strokePath();
+}
+
+function drawStones(g, cx, cy, v) {
+  const n = 2 + (v & 0x03);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + (v & 0x07) * 0.3;
+    const r = 8 + ((v >> i) & 0x07);
+    const sx = cx + Math.cos(a) * 14;
+    const sy = cy + Math.sin(a) * 7;
+    g.fillStyle(0x000000, 0.35);
+    g.fillEllipse(sx, sy + 2, r + 2, r * 0.4);
+    g.fillStyle(0x2a2a35, 0.6);
+    g.fillEllipse(sx, sy, r, r * 0.55);
+    g.fillStyle(0x4a4a5a, 0.5);
+    g.fillEllipse(sx - r * 0.15, sy - r * 0.1, r * 0.55, r * 0.3);
+  }
+}
 
 export default class GameScene extends Phaser.Scene {
   constructor() { super({ key: 'GameScene' }); }
@@ -14,19 +125,43 @@ export default class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#060011');
 
     this.bgGfx = this.add.graphics().setDepth(-10);
+    this.orbitGfx = this.add.graphics().setDepth(14);
     this.joyGfx = this.add.graphics().setDepth(50);
 
+    this.decorations = this.generateDecor();
+    this.scale.on('resize', () => { this.decorations = this.generateDecor(); });
+
     this.player = new Player(this, this.W / 2, this.H / 2);
+    const startW = getOptions().startWeapon || 'dagger';
+    this.player.skills = { [startW]: 1 };
     this.enemies = [];
     this.projectiles = [];
+    this.eprojectiles = [];
+    this.orbs = [];
+    this.items = [];
+    this.buffs = {};
+    this.itemTimer = 8;
     this.elapsed = 0;
     this.kills = 0;
     this.spawnT = 1;
-    this.daggerT = 0;
+    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, whip: 0 };
+    this.orbitAngle = 0;
+    this.orbitHits = new Map();
+    this.trail = [];
+    this.lastTrailX = this.W / 2;
+    this.lastTrailY = this.H / 2;
+    this.trailHits = new Map();
+    this.waveIdx = 0;
+    this.bossWarningSent = new Set();
+    this.bossMusicOn = false;
+    this.bossSeen = new Set(); // enemy refs already announced
     this.over = false;
+    this.paused = false;
+    this.hitstop = 0;
     this.hudT = 0;
 
     this.keys = this.input.keyboard.addKeys('W,A,S,D,Z,Q,UP,DOWN,LEFT,RIGHT');
+    this.input.keyboard.addKey('SPACE').on('down', () => this.tryDash());
 
     this.joystick = { active: false, id: null, baseX: 0, baseY: 0, thumbX: 0, thumbY: 0, dx: 0, dy: 0 };
     this.input.addPointer(2);
@@ -37,6 +172,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.offRestart = bus.on('game:restart', () => this.scene.restart());
     this.offMute    = bus.on('game:mute', m => { setMuted(m); if (!m) startMusic(); });
+    this.offPick    = bus.on('skill:pick', id => this.onSkillPick(id));
 
     initAudio();
     startMusic();
@@ -44,6 +180,7 @@ export default class GameScene extends Phaser.Scene {
     this.events.on('shutdown', () => {
       this.offRestart?.();
       this.offMute?.();
+      this.offPick?.();
       stopMusic();
     });
 
@@ -51,13 +188,15 @@ export default class GameScene extends Phaser.Scene {
   }
 
   onPointerDown(p) {
-    if (this.over) return;
+    if (this.over || this.paused) return;
     const j = this.joystick;
     if (!j.active) {
       j.active = true; j.id = p.id;
       j.baseX = p.x; j.baseY = p.y;
       j.thumbX = p.x; j.thumbY = p.y;
       j.dx = 0; j.dy = 0;
+    } else if (p.id !== j.id) {
+      this.tryDash();
     }
   }
   onPointerMove(p) {
@@ -90,24 +229,62 @@ export default class GameScene extends Phaser.Scene {
     this.enemies.push(new Enemy(this, x, y, typeName, hpMul, 1, dmgMul));
   }
 
+  spawnItem() {
+    const type = ITEM_KEYS[Math.floor(Math.random() * ITEM_KEYS.length)];
+    let x, y, tries = 0;
+    do {
+      x = 60 + Math.random() * (this.W - 120);
+      y = 60 + Math.random() * (this.H - 120);
+      tries++;
+    } while (Math.hypot(x - this.player.x, y - this.player.y) < 120 && tries < 10);
+    this.items.push(new Item(this, x, y, type));
+  }
+
   emitHud() {
+    const p = this.player;
+    const bosses = [];
+    for (const e of this.enemies) {
+      if (e.type === 'boss') bosses.push({ name: e.name || 'BOSS', hp: Math.floor(e.hp), maxHp: e.maxHp });
+    }
     bus.emit('hud:update', {
-      hp: Math.floor(this.player.hp),
-      maxHp: this.player.maxHp,
+      hp: Math.floor(p.hp),
+      maxHp: p.maxHp,
+      xp: p.xp,
+      xpN: xpFor(p.level),
+      lv: p.level,
       t: Math.floor(this.elapsed),
       kills: this.kills,
       goal: GOAL_TIME,
+      skills: { ...p.skills },
+      buffs: { ...this.buffs },
+      bosses,
       over: this.over,
     });
   }
 
   update(_time, delta) {
-    if (this.over) return;
+    if (this.over || this.paused) return;
+    if (this.hitstop > 0) {
+      this.hitstop -= delta / 1000;
+      return;
+    }
     const dt = Math.min(delta / 1000, 0.05);
     const p = this.player;
     this.elapsed += dt;
 
-    // ── Movement (joystick + keyboard)
+    // ── Buff multipliers
+    const speedBoost = this.buffs.speed > 0 ? 2 : 1;
+    const dmgBoost = this.buffs.rage > 0 ? 2 : 1;
+    const freezeMult = this.buffs.freeze > 0 ? 0.25 : 1;
+    const shielded = this.buffs.shield > 0;
+
+    // ── Buffs tick down
+    for (const k in this.buffs) {
+      if (this.buffs[k] > 0) this.buffs[k] -= dt;
+      if (this.buffs[k] <= 0) this.buffs[k] = 0;
+    }
+
+    // ── Movement
     let mx = this.joystick.dx || 0;
     let my = this.joystick.dy || 0;
     const k = this.keys;
@@ -117,55 +294,109 @@ export default class GameScene extends Phaser.Scene {
     if (k.DOWN.isDown || k.S.isDown) my += 1;
     const ml = Math.hypot(mx, my);
     if (ml > 1) { mx /= ml; my /= ml; }
-    p.x += mx * p.speed * dt;
-    p.y += my * p.speed * dt;
+    if (p.dashDur > 0) {
+      p.dashDur -= dt;
+      p.x += p.dashDir.x * 520 * dt;
+      p.y += p.dashDir.y * 520 * dt;
+    } else {
+      p.x += mx * p.speed * speedBoost * dt;
+      p.y += my * p.speed * speedBoost * dt;
+    }
+    if (p.dashCD > 0) p.dashCD -= dt;
     p.x = Math.max(15, Math.min(this.W - 15, p.x));
     p.y = Math.max(15, Math.min(this.H - 15, p.y));
     p.iframes = Math.max(0, p.iframes - dt);
+    if (p.regen > 0) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
 
-    // ── Spawn
+    // ── Wave schedule
+    while (this.waveIdx < WAVES.length && this.elapsed >= WAVES[this.waveIdx].t) {
+      const w = WAVES[this.waveIdx];
+      for (let i = 0; i < w.count; i++) this.spawnEnemy(w.type);
+      if (w.boss) this.spawnEnemy('boss');
+      this.waveIdx++;
+    }
+
+    // ── Boss imminent: ominous warning ~3s before scheduled boss wave
+    for (let i = 0; i < WAVES.length; i++) {
+      const w = WAVES[i];
+      if (!w.boss || this.bossWarningSent.has(i)) continue;
+      const dueIn = w.t - this.elapsed;
+      if (dueIn > 0 && dueIn <= 3) {
+        playBossWarning();
+        this.bossWarningSent.add(i);
+      }
+    }
+
+    // ── Boss appearance: cinematic title + music switch
+    let hasBoss = false;
+    for (const e of this.enemies) {
+      if (e.type !== 'boss') continue;
+      hasBoss = true;
+      if (!this.bossSeen.has(e)) {
+        this.bossSeen.add(e);
+        const name = BOSS_NAMES[Math.floor(Math.random() * BOSS_NAMES.length)];
+        e.name = name;
+        bus.emit('boss:appear', { name });
+      }
+    }
+    if (hasBoss && !this.bossMusicOn) {
+      this.bossMusicOn = true;
+      startMusic('boss');
+    } else if (!hasBoss && this.bossMusicOn) {
+      this.bossMusicOn = false;
+      startMusic('normal');
+    }
+
+    // ── Continuous spawn
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
       this.spawnT = Math.max(0.4, 1.6 / (0.5 + this.elapsed / 90));
       const types = ['bat'];
       if (this.elapsed >= 30) types.push('zombie');
       if (this.elapsed >= 60) types.push('skeleton');
+      if (this.elapsed >= 90) types.push('ghost');
       if (this.elapsed >= 120) types.push('knight');
+      if (this.elapsed >= 150) types.push('witch');
       this.spawnEnemy(types[Math.floor(Math.random() * types.length)]);
     }
 
-    // ── Enemies
+    // ── Item spawner
+    this.itemTimer -= dt;
+    if (this.itemTimer <= 0) {
+      this.itemTimer = 15 + Math.random() * 10;
+      this.spawnItem();
+    }
+
+    // ── Items pickup
+    this.items = this.items.filter(it => {
+      it.life -= dt;
+      it.bob += dt * 3;
+      if (it.life <= 0) { it.destroy(); return false; }
+      if (Math.hypot(it.x - p.x, it.y - p.y) < 22) {
+        this.applyItem(it.type);
+        playSfx('itempickup');
+        it.destroy();
+        return false;
+      }
+      return true;
+    });
+
+    // ── Enemy AI + collision
     for (const e of this.enemies) {
-      const dx = p.x - e.x, dy = p.y - e.y;
-      const d = Math.hypot(dx, dy);
-      const ndx = d > 0 ? dx / d : 0, ndy = d > 0 ? dy / d : 0;
-      e.vx = e.vx * (1 - dt * 4) + ndx * e.speed * dt;
-      e.vy = e.vy * (1 - dt * 4) + ndy * e.speed * dt;
-      e.x += e.vx; e.y += e.vy;
-      if (p.iframes <= 0 && Math.hypot(e.x - p.x, e.y - p.y) < e.size + 14) {
+      this.updateEnemyAi(dt, e, p, freezeMult);
+      if (!shielded && p.iframes <= 0 && Math.hypot(e.x - p.x, e.y - p.y) < e.size + 14) {
         p.hp -= e.dmg;
         p.iframes = 0.9;
         playSfx('hit');
+        this.shake(0.007, 130);
       }
     }
 
-    // ── Dagger auto-fire
-    this.daggerT -= dt;
-    if (this.daggerT <= 0 && this.enemies.length > 0) {
-      this.daggerT = 0.8;
-      let near = null, nd = Infinity;
-      for (const e of this.enemies) {
-        const d = Math.hypot(e.x - p.x, e.y - p.y);
-        if (d < nd) { nd = d; near = e; }
-      }
-      if (near) {
-        const a = Math.atan2(near.y - p.y, near.x - p.x);
-        this.projectiles.push(new Projectile(this, p.x, p.y, Math.cos(a) * 390, Math.sin(a) * 390, 16, false));
-        playSfx('dagger');
-      }
-    }
+    // ── Player weapons
+    this.firePlayerWeapons(dt, p, dmgBoost);
+    this.updateTrail(dt, p, dmgBoost);
 
-    // ── Projectiles
+    // ── Player projectiles
     for (const proj of this.projectiles) {
       proj.x += proj.dx * dt;
       proj.y += proj.dy * dt;
@@ -175,23 +406,59 @@ export default class GameScene extends Phaser.Scene {
         continue;
       }
       for (const e of this.enemies) {
+        if (proj.pierce && proj.hits.has(e)) continue;
         if (Math.hypot(proj.x - e.x, proj.y - e.y) < e.size + 5) {
-          e.hp -= proj.dmg;
-          proj.alive = false;
-          break;
+          const dealt = e.takeDamage(proj.dmg, proj.type || 'physical', this);
+          if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+          if (e.type === 'boss') { this.shake(0.005, 80); this.hitstop = 0.04; }
+          if (proj.pierce) proj.hits.add(e);
+          else { proj.alive = false; break; }
         }
       }
     }
+
+    // ── Enemy projectiles
+    for (const ep of this.eprojectiles) {
+      ep.x += ep.dx * dt;
+      ep.y += ep.dy * dt;
+      ep.life -= dt;
+      if (ep.life <= 0 || ep.x < -50 || ep.x > this.W + 50 || ep.y < -50 || ep.y > this.H + 50) {
+        ep.alive = false;
+        continue;
+      }
+      if (!shielded && p.iframes <= 0 && Math.hypot(ep.x - p.x, ep.y - p.y) < 15) {
+        p.hp -= ep.dmg;
+        p.iframes = 0.7;
+        playSfx('hit');
+        ep.alive = false;
+      }
+    }
+
+    // ── XP orbs
+    this.updateOrbs(dt, p);
 
     // ── Cleanup
     this.projectiles = this.projectiles.filter(pr => {
       if (!pr.alive) pr.destroy();
       return pr.alive;
     });
+    this.eprojectiles = this.eprojectiles.filter(ep => {
+      if (!ep.alive) ep.destroy();
+      return ep.alive;
+    });
     this.enemies = this.enemies.filter(e => {
       if (e.hp <= 0) {
         this.kills++;
-        playSfx('death');
+        playSfx(e.type === 'boss' ? 'boss' : 'death');
+        const value = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM);
+        this.orbs.push(new XpOrb(this, e.x, e.y, value));
+        if (p.kh) p.hp = Math.min(p.maxHp, p.hp + 8);
+        this.fxDeath(e.x, e.y, ETYPES[e.type]?.col ?? 0xffffff);
+        if (e.type === 'boss') {
+          this.shake(0.012, 280);
+          this.hitstop = 0.08;
+          this.bossSeen.delete(e);
+        }
         e.destroy();
         return false;
       }
@@ -213,9 +480,14 @@ export default class GameScene extends Phaser.Scene {
 
     // ── Render
     this.drawBg();
+    for (const t of this.trail) t.redraw();
     p.redraw();
+    for (const it of this.items) it.redraw();
     for (const e of this.enemies) e.redraw();
     for (const proj of this.projectiles) proj.redraw();
+    for (const ep of this.eprojectiles) ep.redraw();
+    for (const o of this.orbs) o.redraw();
+    this.drawOrbits(p);
     this.drawJoystick();
 
     // ── HUD throttle
@@ -223,15 +495,582 @@ export default class GameScene extends Phaser.Scene {
     if (this.hudT > 0.12) { this.hudT = 0; this.emitHud(); }
   }
 
+  applyItem(type) {
+    const p = this.player;
+    if (type === 'heal') {
+      p.hp = Math.min(p.maxHp, p.hp + 40);
+    } else if (type === 'magnet') {
+      for (const o of this.orbs) { o.x = p.x; o.y = p.y; }
+    } else {
+      const dur = ITEM_DURATIONS[type];
+      this.buffs[type] = (this.buffs[type] || 0) + dur;
+    }
+  }
+
+  tryDash() {
+    if (this.over || this.paused) return;
+    const p = this.player;
+    if (!p.canDash || p.dashCD > 0 || p.dashDur > 0) return;
+    let dx = this.joystick.dx || 0;
+    let dy = this.joystick.dy || 0;
+    const k = this.keys;
+    if (k.LEFT.isDown || k.A.isDown || k.Q.isDown) dx -= 1;
+    if (k.RIGHT.isDown || k.D.isDown) dx += 1;
+    if (k.UP.isDown || k.W.isDown || k.Z.isDown) dy -= 1;
+    if (k.DOWN.isDown || k.S.isDown) dy += 1;
+    const l = Math.hypot(dx, dy);
+    if (l < 0.05) return;
+    p.dashDir = { x: dx / l, y: dy / l };
+    p.dashDur = 0.15;
+    p.dashCD = 2;
+    if (slv(p, 'boots') >= 3) p.iframes = Math.max(p.iframes, 0.18);
+  }
+
+  fxDeath(x, y, col) {
+    const g = this.add.graphics().setDepth(11);
+    g.x = x; g.y = y;
+    g.fillStyle(col, 1);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      g.fillCircle(Math.cos(a) * 4, Math.sin(a) * 4, 3);
+    }
+    this.tweens.add({
+      targets: g, scale: 2.5, alpha: 0,
+      duration: 420,
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  updateEnemyAi(dt, e, p, freezeMult) {
+    e.tickStatuses(dt, this);
+    const dx = p.x - e.x, dy = p.y - e.y;
+    const dist = Math.hypot(dx, dy);
+    const ndx = dist > 0 ? dx / dist : 0;
+    const ndy = dist > 0 ? dy / dist : 0;
+    const frozenMod = e.statuses.frozen ? 0.4 : 1;
+    const sf = freezeMult * frozenMod;
+    // Velocity is now in px/s directly. We exponentially smooth toward a target
+    // velocity (`tvx`/`tvy`), then integrate position with `e.x += e.vx * dt`.
+    let tvx = ndx * e.speed * sf;
+    let tvy = ndy * e.speed * sf;
+    let smooth = 4;
+    let directMove = false;
+
+    switch (e.behavior) {
+      case 'wavy': {
+        e.angle = (e.angle || 0) + dt * 3;
+        const w = Math.sin(e.angle) * 0.7;
+        tvx = (ndx + (-ndy) * w) * e.speed * sf;
+        tvy = (ndy + ndx * w) * e.speed * sf;
+        smooth = 3;
+        break;
+      }
+      case 'phase': {
+        smooth = 2;
+        break;
+      }
+      case 'charge': {
+        if (e.charging) {
+          e.chargeDur -= dt;
+          // direct displacement during charge burst
+          e.x += e.chargeDx * e.speed * 3 * sf * dt;
+          e.y += e.chargeDy * e.speed * 3 * sf * dt;
+          directMove = true;
+          if (e.chargeDur <= 0) { e.charging = false; e.chargeTimer = 3 + Math.random() * 2; }
+        } else {
+          e.chargeTimer -= dt;
+          tvx = ndx * e.speed * 0.5 * sf;
+          tvy = ndy * e.speed * 0.5 * sf;
+          if (e.chargeTimer <= 0) {
+            e.charging = true;
+            e.chargeDx = ndx; e.chargeDy = ndy;
+            e.chargeDur = 0.35;
+          }
+        }
+        break;
+      }
+      case 'ranged': {
+        tvx = ndx * e.speed * 0.6 * sf;
+        tvy = ndy * e.speed * 0.6 * sf;
+        e.shootTimer -= dt;
+        if (e.shootTimer <= 0 && dist < 260) {
+          e.shootTimer = 2.5 + Math.random() * 1.5;
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, ndx * 140, ndy * 140, e.dmg, 0xc8c8b0, 5));
+          playSfx('eprojshoot');
+        }
+        break;
+      }
+      case 'kite': {
+        const ideal = e.kiteDist;
+        if (dist < ideal - 20) {
+          tvx = -ndx * e.speed * sf;
+          tvy = -ndy * e.speed * sf;
+        } else if (dist > ideal + 20) {
+          tvx = ndx * e.speed * 0.5 * sf;
+          tvy = ndy * e.speed * 0.5 * sf;
+        } else {
+          tvx = 0; tvy = 0; smooth = 6;
+        }
+        e.shootTimer -= dt;
+        if (e.shootTimer <= 0 && dist < 300) {
+          e.shootTimer = 2 + Math.random();
+          const col = e.type === 'witch' ? 0xcc44ff : 0xff8800;
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, ndx * 160, ndy * 160, e.dmg * 1.5, col, 6));
+          playSfx('eprojshoot');
+        }
+        break;
+      }
+      case 'boss': {
+        smooth = 3;
+        if (dist > 500) {
+          e.x = p.x + (Math.random() - 0.5) * 300;
+          e.y = p.y + (Math.random() - 0.5) * 300;
+        }
+        e.shootTimer = (e.shootTimer ?? 2) - dt;
+        if (e.shootTimer <= 0) {
+          e.shootTimer = 3;
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * 130, Math.sin(a) * 130, e.dmg, 0xff4400, 7));
+          }
+          playSfx('eprojshoot');
+        }
+        break;
+      }
+      case 'direct':
+      default:
+        break;
+    }
+
+    if (!directMove) {
+      const k = 1 - Math.exp(-smooth * dt);
+      e.vx += (tvx - e.vx) * k;
+      e.vy += (tvy - e.vy) * k;
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+    }
+  }
+
+  firePlayerWeapons(dt, p, dmgBoost) {
+    const dlv = slv(p, 'dagger');
+    if (dlv > 0) {
+      this.weaponT.dagger -= dt;
+      if (this.weaponT.dagger <= 0 && this.enemies.length > 0) {
+        this.weaponT.dagger = dlv >= 3 ? 0.45 : 0.8;
+        let near = null, nd = Infinity;
+        for (const e of this.enemies) {
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          if (d < nd) { nd = d; near = e; }
+        }
+        if (near) {
+          const count = dlv >= 4 ? 3 : dlv >= 2 ? 2 : 1;
+          const base = Math.atan2(near.y - p.y, near.x - p.x);
+          const dmg = (12 + dlv * 4) * p.dmgM * dmgBoost;
+          for (let i = 0; i < count; i++) {
+            const ang = base + (i - (count - 1) / 2) * 0.3;
+            this.projectiles.push(new Projectile(this, p.x, p.y, Math.cos(ang) * 390, Math.sin(ang) * 390, dmg, dlv >= 5));
+          }
+          playSfx('dagger');
+        }
+      }
+    }
+
+    const olv = slv(p, 'orbit');
+    if (olv > 0) {
+      const radius = olv >= 4 ? 90 : 70;
+      const speed = olv >= 5 ? 3.0 : 2.0;
+      const dmg = (10 + olv * 4) * p.dmgM * dmgBoost * (olv >= 5 ? 1.5 : olv >= 3 ? 1.2 : 1);
+      const orbR = 12;
+      this.orbitAngle += speed * dt;
+      // tick down per-enemy hit cooldowns
+      for (const [k, v] of this.orbitHits) {
+        const nv = v - dt;
+        if (nv <= 0) this.orbitHits.delete(k);
+        else this.orbitHits.set(k, nv);
+      }
+      for (let i = 0; i < olv; i++) {
+        const a = this.orbitAngle + (i / olv) * Math.PI * 2;
+        const ox = p.x + Math.cos(a) * radius;
+        const oy = p.y + Math.sin(a) * radius;
+        for (const e of this.enemies) {
+          if (this.orbitHits.has(e)) continue;
+          if (Math.hypot(e.x - ox, e.y - oy) < e.size + orbR) {
+            const dealt = e.takeDamage(dmg, 'dark', this);
+            if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+            this.orbitHits.set(e, 0.5);
+          }
+        }
+      }
+    }
+
+    const swlv = slv(p, 'sword');
+    if (swlv > 0) {
+      this.weaponT.sword -= dt;
+      if (this.weaponT.sword <= 0) {
+        this.weaponT.sword = swlv >= 5 ? 0.5 : swlv >= 2 ? 0.85 : 1.1;
+        const radius = 70 + swlv * 8;
+        const dmg = (22 + swlv * 7) * p.dmgM * dmgBoost * (swlv >= 4 ? 1.5 : 1);
+        const arcDeg = swlv >= 4 ? 360 : swlv >= 3 ? 180 : swlv >= 2 ? 120 : 90;
+        const arc = arcDeg * Math.PI / 180;
+        let near = null, nd = Infinity;
+        for (const e of this.enemies) {
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          if (d < nd) { nd = d; near = e; }
+        }
+        const baseAngle = near ? Math.atan2(near.y - p.y, near.x - p.x) : 0;
+        this.applySwordSlash(p, baseAngle, arc, arcDeg, radius, dmg);
+        this.fxSwordSlash(p.x, p.y, baseAngle, arc, radius, false);
+        playSfx('dagger');
+        if (swlv >= 5) {
+          this.time.delayedCall(140, () => {
+            if (this.over || this.paused) return;
+            const a2 = baseAngle + Math.PI / 5;
+            this.applySwordSlash(p, a2, arc, arcDeg, radius, dmg * 0.7);
+            this.fxSwordSlash(p.x, p.y, a2, arc, radius, true);
+            playSfx('dagger');
+          });
+        }
+      }
+    }
+
+    const wlv = slv(p, 'whip');
+    if (wlv > 0) {
+      this.weaponT.whip -= dt;
+      if (this.weaponT.whip <= 0) {
+        this.weaponT.whip = wlv >= 5 ? 0.6 : wlv >= 3 ? 0.85 : 1.0;
+        const length = wlv >= 4 ? 200 : wlv >= 2 ? 165 : 130;
+        const width = 38;
+        const dmg = (18 + wlv * 5) * p.dmgM * dmgBoost * (wlv >= 4 ? 1.3 : 1);
+        let near = null, nd = Infinity;
+        for (const e of this.enemies) {
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          if (d < nd) { nd = d; near = e; }
+        }
+        const baseAngle = near ? Math.atan2(near.y - p.y, near.x - p.x) : 0;
+        const angles = wlv >= 5 ? [0, Math.PI / 2, Math.PI, -Math.PI / 2]
+                     : wlv >= 3 ? [baseAngle, baseAngle + Math.PI]
+                                : [baseAngle];
+        for (const a of angles) {
+          this.applyWhipStrike(p, a, length, width, dmg);
+          this.fxWhip(p.x, p.y, a, length, width);
+        }
+        playSfx('lightning');
+      }
+    }
+
+    const nlv = slv(p, 'nova');
+    if (nlv > 0) {
+      this.weaponT.nova -= dt;
+      if (this.weaponT.nova <= 0) {
+        this.weaponT.nova = nlv >= 4 ? 1.2 : 2;
+        const r = (80 + nlv * 25) * (nlv >= 5 ? 1.5 : 1);
+        const dmg = (18 + nlv * 10) * p.dmgM * (nlv >= 3 ? 1.5 : 1) * dmgBoost;
+        for (const e of this.enemies) {
+          if (Math.hypot(e.x - p.x, e.y - p.y) < r) {
+            const dealt = e.takeDamage(dmg, 'fire', this);
+            if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+            if (nlv >= 5) {
+              const a = Math.atan2(e.y - p.y, e.x - p.x);
+              e.vx += Math.cos(a) * 320;
+              e.vy += Math.sin(a) * 320;
+            }
+          }
+        }
+        this.fxNova(p.x, p.y, r);
+        this.shake(0.005, 100);
+        playSfx('nova');
+      }
+    }
+
+    const llv = slv(p, 'lightning');
+    if (llv > 0) {
+      this.weaponT.lightning -= dt;
+      if (this.weaponT.lightning <= 0 && this.enemies.length > 0) {
+        this.weaponT.lightning = llv >= 5 ? 0.4 : llv >= 3 ? 0.8 : 1.5;
+        const chains = llv >= 4 ? 4 : llv >= 2 ? 2 : 1;
+        const dmg = (20 + llv * 8) * p.dmgM * dmgBoost;
+        let prev = { x: p.x, y: p.y };
+        let pool = this.enemies.slice();
+        for (let c = 0; c < chains && pool.length > 0; c++) {
+          let near = null, nd = Infinity;
+          for (const e of pool) {
+            const d = Math.hypot(e.x - prev.x, e.y - prev.y);
+            if (d < nd) { nd = d; near = e; }
+          }
+          if (!near || nd > 360) break;
+          const dealt = near.takeDamage(dmg, 'lightning', this);
+          if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+          this.fxBolt(prev.x, prev.y, near.x, near.y);
+          prev = { x: near.x, y: near.y };
+          pool = pool.filter(e => e !== near);
+        }
+        playSfx('lightning');
+      }
+    }
+  }
+
+  updateTrail(dt, p, dmgBoost) {
+    const tlv = slv(p, 'trail');
+    if (tlv > 0) {
+      const dropStep = tlv >= 2 ? 22 : 32;
+      const radius = tlv >= 5 ? 40 : tlv >= 3 ? 28 : 22;
+      const maxLife = tlv >= 5 ? 4 : tlv >= 3 ? 3 : 2.5;
+      const dx = p.x - this.lastTrailX;
+      const dy = p.y - this.lastTrailY;
+      if (Math.hypot(dx, dy) >= dropStep) {
+        this.trail.push(new TrailTile(this, p.x - dx * 0.3, p.y - dy * 0.3, radius, maxLife));
+        this.lastTrailX = p.x;
+        this.lastTrailY = p.y;
+      }
+    }
+    // tick down tiles
+    this.trail = this.trail.filter(t => {
+      t.life -= dt;
+      if (t.life <= 0) { t.destroy(); return false; }
+      return true;
+    });
+    if (tlv > 0 && this.trail.length > 0) {
+      const dmg = (5 + tlv * 2.5) * p.dmgM * dmgBoost * (tlv >= 4 ? 1.5 : 1) * (tlv >= 5 ? 1.5 : 1);
+      for (const [k, v] of this.trailHits) {
+        const nv = v - dt;
+        if (nv <= 0) this.trailHits.delete(k);
+        else this.trailHits.set(k, nv);
+      }
+      for (const e of this.enemies) {
+        if (this.trailHits.has(e)) continue;
+        for (const t of this.trail) {
+          if (Math.hypot(e.x - t.x, e.y - t.y) < t.radius + e.size) {
+            const dealt = e.takeDamage(dmg, 'poison', this);
+            if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+            this.trailHits.set(e, 0.4);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  updateOrbs(dt, p) {
+    this.orbs = this.orbs.filter(o => {
+      o.life -= dt;
+      if (o.life <= 0) { o.destroy(); return false; }
+      const dx = p.x - o.x, dy = p.y - o.y;
+      const d = Math.hypot(dx, dy);
+      if (d < p.magnet) {
+        const sp = Math.max(200, 380 * (1 - d / p.magnet));
+        const a = Math.atan2(dy, dx);
+        o.x += Math.cos(a) * sp * dt;
+        o.y += Math.sin(a) * sp * dt;
+      }
+      if (d < 18) {
+        p.xp += o.value;
+        playSfx('xp');
+        if (p.xp >= xpFor(p.level)) {
+          p.xp -= xpFor(p.level);
+          p.level++;
+          p.hp = Math.min(p.maxHp, p.hp + 15);
+          playSfx('levelup');
+          this.onLevelUp(p);
+        }
+        o.destroy();
+        return false;
+      }
+      return true;
+    });
+  }
+
+  onLevelUp(p) {
+    this.paused = true;
+    this.shake(0.006, 200);
+    stopMusic();
+    const choices = getChoices(p);
+    bus.emit('levelup', { lv: p.level, choices });
+    this.emitHud();
+  }
+
+  onSkillPick(id) {
+    const p = this.player;
+    p.skills[id] = (p.skills[id] || 0) + 1;
+    if (id === 'heart') {
+      const lv = p.skills.heart;
+      p.maxHp += lv <= 2 ? 50 : 80;
+      if (lv === 3) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.15);
+    }
+    refreshStats(p);
+    this.paused = false;
+    if (!this.over) startMusic();
+    this.emitHud();
+  }
+
+  fxNova(x, y, r) {
+    const g = this.add.graphics().setDepth(12);
+    g.fillStyle(0xff6b35, 0.25);
+    g.fillCircle(0, 0, r);
+    g.lineStyle(2, 0xff6b35, 0.9);
+    g.strokeCircle(0, 0, r);
+    g.x = x; g.y = y; g.scale = 0.4;
+    this.tweens.add({
+      targets: g, scale: 1, alpha: 0,
+      duration: 320,
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  applySwordSlash(p, baseAngle, arc, arcDeg, radius, dmg) {
+    for (const e of this.enemies) {
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d > radius) continue;
+      if (arcDeg < 360) {
+        const ea = Math.atan2(e.y - p.y, e.x - p.x);
+        let diff = ea - baseAngle;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        if (Math.abs(diff) > arc / 2) continue;
+      }
+      const dealt = e.takeDamage(dmg, 'physical', this);
+      if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+      const a = Math.atan2(e.y - p.y, e.x - p.x);
+      e.vx += Math.cos(a) * 80;
+      e.vy += Math.sin(a) * 80;
+    }
+  }
+
+  applyWhipStrike(p, angle, length, width, dmg) {
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const half = width / 2;
+    for (const e of this.enemies) {
+      const dx = e.x - p.x, dy = e.y - p.y;
+      const fwd = cos * dx + sin * dy;
+      const side = -sin * dx + cos * dy;
+      if (fwd >= -e.size && fwd <= length + e.size && Math.abs(side) <= half + e.size) {
+        const dealt = e.takeDamage(dmg, 'physical', this);
+        if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+        const a = Math.atan2(e.y - p.y, e.x - p.x);
+        e.vx += Math.cos(a) * 110;
+        e.vy += Math.sin(a) * 110;
+      }
+    }
+  }
+
+  fxWhip(x, y, angle, length, width) {
+    const g = this.add.graphics().setDepth(13);
+    g.x = x; g.y = y;
+    g.rotation = angle;
+    g.fillStyle(0xd4a4ff, 0.32);
+    g.fillRect(0, -width / 2, length, width);
+    g.fillStyle(0xffeeff, 0.7);
+    g.fillRect(0, -2.5, length, 5);
+    g.lineStyle(2, 0xc77dff, 0.85);
+    g.strokeRect(0, -width / 2, length, width);
+    // tip flare
+    g.fillStyle(0xffeeff, 0.85);
+    g.fillCircle(length, 0, 5);
+    this.tweens.add({
+      targets: g, alpha: 0,
+      duration: 220,
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  fxSwordSlash(x, y, angle, arc, radius, second = false) {
+    const g = this.add.graphics().setDepth(13);
+    g.x = x; g.y = y;
+    const start = angle - arc / 2;
+    const end = angle + arc / 2;
+    g.fillStyle(second ? 0xffaadd : 0xffd0e0, 0.32);
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.arc(0, 0, radius, start, end, false);
+    g.closePath();
+    g.fillPath();
+    g.lineStyle(3, second ? 0xff6688 : 0xffaacc, 1);
+    g.beginPath();
+    g.arc(0, 0, radius, start, end, false);
+    g.strokePath();
+    // inner highlight
+    g.lineStyle(1.5, 0xffffff, 0.7);
+    g.beginPath();
+    g.arc(0, 0, radius * 0.85, start, end, false);
+    g.strokePath();
+    this.tweens.add({
+      targets: g, alpha: 0, scale: 1.15,
+      duration: 220,
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  shake(intensity = 0.004, durationMs = 120) {
+    this.cameras.main.shake(durationMs, intensity);
+  }
+
+  fxDamage(x, y, dmg, isCrit = false) {
+    const value = Math.round(dmg);
+    if (value <= 0) return;
+    const t = this.add.text(x, y - 18, isCrit ? `${value}!` : `${value}`, {
+      fontFamily: "'Cinzel', serif",
+      fontSize: isCrit ? '22px' : '15px',
+      color: isCrit ? '#ffe066' : '#ffffff',
+      stroke: '#1a0030',
+      strokeThickness: 3,
+      fontStyle: isCrit ? 'bold' : 'normal',
+    }).setOrigin(0.5).setDepth(40);
+    this.tweens.add({
+      targets: t,
+      y: y - 60,
+      alpha: 0,
+      scale: isCrit ? 1.4 : 1,
+      duration: 700,
+      ease: 'Cubic.out',
+      onComplete: () => t.destroy(),
+    });
+  }
+
+  fxBolt(x1, y1, x2, y2) {
+    const g = this.add.graphics().setDepth(12);
+    g.lineStyle(2, 0xffe066, 1);
+    const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * 28;
+    const my = (y1 + y2) / 2 + (Math.random() - 0.5) * 28;
+    g.beginPath();
+    g.moveTo(x1, y1);
+    g.lineTo(mx, my);
+    g.lineTo(x2, y2);
+    g.strokePath();
+    this.tweens.add({
+      targets: g, alpha: 0,
+      duration: 180,
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  generateDecor() {
+    const list = [];
+    const TILE = 220;
+    for (let x = TILE / 2; x < this.W; x += TILE) {
+      for (let y = TILE / 2; y < this.H; y += TILE) {
+        let h = ((x | 0) * 73856093) ^ ((y | 0) * 19349663);
+        h = (h ^ (h >>> 13)) * 1274126177;
+        h = h ^ (h >>> 16);
+        const r = ((h >>> 0) % 1000) / 1000;
+        if (r < 0.55) {
+          const type = ((h >>> 8) & 3);
+          const ox = (((h >>> 4) & 0x3f) - 32) * 1.8;
+          const oy = (((h >>> 12) & 0x3f) - 32) * 1.8;
+          list.push({ x: x + ox, y: y + oy, type, hash: h });
+        }
+      }
+    }
+    return list;
+  }
+
   drawBg() {
     const g = this.bgGfx;
     g.clear();
-    const p = this.player;
-    const ox = (p.x * 0.55 % 80 + 80) % 80;
-    const oy = (p.y * 0.55 % 70 + 70) % 70;
-    g.lineStyle(1, 0x3c005f, 0.18);
-    for (let x = -ox - 80; x < this.W + 80; x += 80) {
-      for (let y = -oy - 70; y < this.H + 70; y += 70) {
+    const t = this.elapsed;
+
+    // Hex grid — fixed in world space (no parallax to avoid the floor-glide illusion)
+    g.lineStyle(1, 0x3c005f, 0.10);
+    for (let x = 0; x < this.W + 80; x += 80) {
+      for (let y = 0; y < this.H + 70; y += 70) {
         g.beginPath();
         for (let i = 0; i < 6; i++) {
           const a = Math.PI / 3 * i - Math.PI / 6;
@@ -242,6 +1081,50 @@ export default class GameScene extends Phaser.Scene {
         g.strokePath();
       }
     }
+
+    // Decorations (fixed positions, generated once per scene/resize)
+    for (const d of this.decorations) drawDecor(g, d.x, d.y, d.type, d.hash);
+
+    // Mist — animated (movement is intentional, slow ambient drift)
+    g.fillStyle(0x4a0a80, 0.07);
+    for (let i = 0; i < 5; i++) {
+      const fx = (this.W * 0.5) + Math.cos(t * 0.05 + i * 1.7) * (this.W * 0.45);
+      const fy = (this.H * 0.5) + Math.sin(t * 0.04 + i * 2.3) * (this.H * 0.45);
+      g.fillCircle(fx, fy, 130 + Math.sin(t * 0.3 + i) * 30);
+    }
+    g.fillStyle(0x1a0040, 0.06);
+    for (let i = 0; i < 3; i++) {
+      const fx = (this.W * 0.5) + Math.cos(t * 0.07 + i * 3.1) * (this.W * 0.5);
+      const fy = (this.H * 0.5) + Math.sin(t * 0.08 + i * 1.5) * (this.H * 0.5);
+      g.fillCircle(fx, fy, 200);
+    }
+  }
+
+  drawOrbits(p) {
+    const g = this.orbitGfx;
+    g.clear();
+    const olv = slv(p, 'orbit');
+    if (olv <= 0) return;
+    const radius = olv >= 4 ? 90 : 70;
+    for (let i = 0; i < olv; i++) {
+      const a = this.orbitAngle + (i / olv) * Math.PI * 2;
+      const x = p.x + Math.cos(a) * radius;
+      const y = p.y + Math.sin(a) * radius;
+      // halo
+      g.fillStyle(0xb894ff, 0.18);
+      g.fillCircle(x, y, 18);
+      g.fillStyle(0xc77dff, 0.45);
+      g.fillCircle(x, y, 12);
+      // core
+      g.fillStyle(0xe0aaff, 1);
+      g.fillCircle(x, y, 8);
+      // highlight
+      g.fillStyle(0xffffff, 0.85);
+      g.fillCircle(x - 2, y - 2, 3);
+    }
+    // faint orbit ring
+    g.lineStyle(1, 0xb894ff, 0.12);
+    g.strokeCircle(p.x, p.y, radius);
   }
 
   drawJoystick() {

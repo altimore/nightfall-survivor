@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import GameScene from './scenes/GameScene.js';
 
+let runOptions = { startWeapon: 'dagger' };
+export function setOptions(o) { runOptions = { ...runOptions, ...o }; }
+export function getOptions() { return runOptions; }
+
 export function createGame(parent) {
   return new Phaser.Game({
     type: Phaser.AUTO,

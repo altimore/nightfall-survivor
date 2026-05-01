@@ -2,6 +2,7 @@
 let audio = null;
 let muted = false;
 let musicTimer = null;
+let currentVariant = null;
 
 export function initAudio() {
   if (audio) return audio;
@@ -19,6 +20,7 @@ export function setMuted(v) {
   if (muted) stopMusic();
 }
 export const isMuted = () => muted;
+export const currentMusicVariant = () => currentVariant;
 
 function tone(a, freq, type, atk, sus, rel, vol = 0.3, off = 0) {
   const t = a.ctx.currentTime + off;
@@ -29,6 +31,18 @@ function tone(a, freq, type, atk, sus, rel, vol = 0.3, off = 0) {
   e.gain.setValueAtTime(vol, t + atk + sus);
   e.gain.linearRampToValueAtTime(0, t + atk + sus + rel);
   o.connect(e); e.connect(a.master); o.start(t); o.stop(t + atk + sus + rel + 0.01);
+}
+
+function pitchSweep(a, fStart, fEnd, dur, vol = 0.3, off = 0, type = 'sawtooth') {
+  const t = a.ctx.currentTime + off;
+  const o = a.ctx.createOscillator(), e = a.ctx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(fStart, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(20, fEnd), t + dur);
+  e.gain.setValueAtTime(0, t);
+  e.gain.linearRampToValueAtTime(vol, t + 0.05);
+  e.gain.linearRampToValueAtTime(0, t + dur);
+  o.connect(e); e.connect(a.master); o.start(t); o.stop(t + dur + 0.01);
 }
 
 function noiseBlast(a, dur, vol = 0.2, hp = 500, off = 0) {
@@ -70,6 +84,7 @@ const HAPTICS = {
   gameover: () => navigator.vibrate?.([100,50,100,50,200]),
   victory:  () => navigator.vibrate?.([50,30,50,30,50,30,200]),
   itempickup: () => navigator.vibrate?.([20,10,40]),
+  bossWarning: () => navigator.vibrate?.([200, 80, 200, 80, 400]),
 };
 
 export function playSfx(name) {
@@ -78,29 +93,87 @@ export function playSfx(name) {
   HAPTICS[name]?.();
 }
 
-const MUSIC_BPM = 95;
-const BEAT_S = 60 / MUSIC_BPM;
-const BASS_SEQ = [55,55,49,52,55,49,52,55];
-const PAD_CHORDS = [[110,138,165],[98,123,147],[104,131,156],[110,131,165]];
+// ────────────────────────────────────────
+// Boss-imminent warning — descending sweep + sub drone + climax boom
+// ────────────────────────────────────────
+export function playBossWarning() {
+  if (muted || !audio) return;
+  const a = audio;
+  // descending menacing sweep
+  pitchSweep(a, 220, 55, 1.2, 0.32, 0, 'sawtooth');
+  pitchSweep(a, 165, 41, 1.4, 0.22, 0.2, 'square');
+  // sub bass drone
+  tone(a, 41, 'sine', 0.4, 1.5, 1.0, 0.5, 0);
+  tone(a, 55, 'sine', 0.4, 1.5, 1.0, 0.30, 0.2);
+  // ominous noise rumble
+  noiseBlast(a, 0.4, 0.10, 80, 0);
+  noiseBlast(a, 0.6, 0.15, 60, 0.8);
+  // climax boom at 1.6s
+  pitchSweep(a, 220, 33, 0.5, 0.55, 1.6, 'sawtooth');
+  noiseBlast(a, 0.35, 0.4, 50, 1.6);
+  HAPTICS.bossWarning?.();
+}
 
-export function startMusic() {
+// ────────────────────────────────────────
+// Music — two variants: 'normal' and 'boss'
+// ────────────────────────────────────────
+const MUSIC_VARIANTS = {
+  normal: {
+    bpm: 95,
+    bassSeq: [55, 55, 49, 52, 55, 49, 52, 55],
+    padChords: [[110,138,165],[98,123,147],[104,131,156],[110,131,165]],
+    bassWave: 'triangle',
+    kick: false,
+    snareVol: 0.14,
+    bassVol: 0.38,
+    padVol: 0.05,
+  },
+  boss: {
+    bpm: 118,
+    bassSeq: [41, 41, 39, 41, 41, 39, 49, 49],
+    padChords: [[82,98,123],[78,93,116],[87,104,131],[82,98,131]],
+    bassWave: 'sawtooth',
+    kick: true,
+    snareVol: 0.18,
+    bassVol: 0.44,
+    padVol: 0.07,
+  },
+};
+
+export function startMusic(variant = 'normal') {
   if (muted || !audio) return;
   stopMusic();
+  const cfg = MUSIC_VARIANTS[variant] || MUSIC_VARIANTS.normal;
+  currentVariant = variant;
+  const beatS = 60 / cfg.bpm;
+  const a = audio;
   let step = 0;
   let nextT = audio.ctx.currentTime + 0.05;
-  const a = audio;
   const schedule = () => {
     while (nextT < a.ctx.currentTime + 0.4) {
       const s = step % 32;
-      if (s % 4 === 0 || s === 10 || s === 22) tone(a, BASS_SEQ[Math.floor(s/4) % BASS_SEQ.length], 'triangle', .04, BEAT_S*.6, BEAT_S*.4, .38, nextT - a.ctx.currentTime);
-      if (s % 8 === 0) tone(a, BASS_SEQ[Math.floor(s/8) % 4] * 0.5, 'sine', .1, BEAT_S*3, BEAT_S, .22, nextT - a.ctx.currentTime);
-      noiseBlast(a, .04, s % 2 === 0 ? .06 : .03, 9000, nextT - a.ctx.currentTime);
-      if (s % 8 === 4 || s % 8 === 12) noiseBlast(a, .12, .14, 800, nextT - a.ctx.currentTime);
-      if (s % 16 === 0) {
-        const c = PAD_CHORDS[Math.floor(step/16) % 4];
-        c.forEach(f => tone(a, f, 'sine', .4, BEAT_S*5, BEAT_S*2, .05, nextT - a.ctx.currentTime));
+      const off = nextT - a.ctx.currentTime;
+      // bass line
+      if (s % 4 === 0 || s === 10 || s === 22) {
+        tone(a, cfg.bassSeq[Math.floor(s / 4) % cfg.bassSeq.length], cfg.bassWave, .04, beatS * .6, beatS * .4, cfg.bassVol, off);
       }
-      nextT += BEAT_S / 2; step++;
+      // sub bass octave
+      if (s % 8 === 0) {
+        tone(a, cfg.bassSeq[Math.floor(s / 8) % 4] * 0.5, 'sine', .1, beatS * 3, beatS, cfg.bassVol * 0.6, off);
+      }
+      // hi-hat
+      noiseBlast(a, .04, s % 2 === 0 ? .06 : .03, 9000, off);
+      // snare on offbeats
+      if (s % 8 === 4 || s % 8 === 12) noiseBlast(a, .12, cfg.snareVol, 800, off);
+      // kick drum (boss only — 4-on-the-floor)
+      if (cfg.kick && s % 4 === 0) noiseBlast(a, .09, .42, 70, off);
+      // pads
+      if (s % 16 === 0) {
+        const c = cfg.padChords[Math.floor(step / 16) % cfg.padChords.length];
+        c.forEach(f => tone(a, f, 'sine', .4, beatS * 5, beatS * 2, cfg.padVol, off));
+      }
+      nextT += beatS / 2;
+      step++;
     }
     musicTimer = setTimeout(schedule, 120);
   };
@@ -109,4 +182,5 @@ export function startMusic() {
 
 export function stopMusic() {
   if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
+  currentVariant = null;
 }
