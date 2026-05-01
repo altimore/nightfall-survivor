@@ -444,10 +444,12 @@ export default class GameScene extends Phaser.Scene {
     }
     if (typeName === 'boss') {
       const kinds = {
-        shadow:  { col: 0x8b0000, eyeCol: 0xffff00, projCol: 0xff4400, move: 'standard', label: "Carcassemort" },
-        frost:   { col: 0x4a78a8, eyeCol: 0xc0e0ff, projCol: 0x88ccff, move: 'orbiter',  label: "L'Hiver Maudit" },
-        inferno: { col: 0xa83018, eyeCol: 0xffaa00, projCol: 0xff8800, move: 'charger',  label: "Brasier Éternel" },
-        void:    { col: 0x4a1a8a, eyeCol: 0xff00ff, projCol: 0xb088ff, move: 'phasing',  label: "L'Abime Sans Fond" },
+        shadow:   { col: 0x8b0000, eyeCol: 0xffff00, projCol: 0xff4400, move: 'standard', label: "Carcassemort" },
+        frost:    { col: 0x4a78a8, eyeCol: 0xc0e0ff, projCol: 0x88ccff, move: 'orbiter',  label: "L'Hiver Maudit" },
+        inferno:  { col: 0xa83018, eyeCol: 0xffaa00, projCol: 0xff8800, move: 'charger',  label: "Brasier Éternel" },
+        void:     { col: 0x4a1a8a, eyeCol: 0xff00ff, projCol: 0xb088ff, move: 'phasing',  label: "L'Abime Sans Fond" },
+        summoner: { col: 0x4a8030, eyeCol: 0xc8ff80, projCol: 0x88ff66, move: 'standard', label: "Marionnettiste Maudit" },
+        phoenix:  { col: 0xff7700, eyeCol: 0xffe066, projCol: 0xffaa44, move: 'charger',  label: "Phénix Funeste" },
       };
       const kindIds = Object.keys(kinds);
       const kindId = kindIds[Math.floor(Math.random() * kindIds.length)];
@@ -1072,6 +1074,26 @@ export default class GameScene extends Phaser.Scene {
     });
     this.enemies = this.enemies.filter(e => {
       if (e.hp <= 0) {
+        // Phénix : revive once at 50% HP with iframes + visual blast
+        if (e.type === 'boss' && e.kind === 'phoenix' && !e.phoenixRevived) {
+          e.phoenixRevived = true;
+          e.hp = Math.floor(e.maxHp * 0.5);
+          this.fxNova(e.x, e.y, 130);
+          this.shake(0.012, 280);
+          playSfx('boss');
+          this.fxBanner('🔥 Renaissance ! 🔥', '#ffaa44', 24);
+          return true;
+        }
+        // Summoner : on the first death-tick, summon 4 adds in a ring (one-shot)
+        if (e.type === 'boss' && e.kind === 'summoner' && !e.summonedDeath) {
+          e.summonedDeath = true;
+          for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2;
+            const ax = e.x + Math.cos(a) * 36, ay = e.y + Math.sin(a) * 36;
+            const t = ['skeleton', 'wraith', 'witch', 'slime'][i % 4];
+            this.enemies.push(new Enemy(this, ax, ay, t, 1.4, 1, 1));
+          }
+        }
         if (e.type === 'treasure') {
           // big bonus on kill: drop a burst of XP orbs
           const baseValue = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM);
@@ -1090,10 +1112,12 @@ export default class GameScene extends Phaser.Scene {
           this.kills++;
           if (p && p.id != null) p.kills = (p.kills || 0) + 1;
           playSfx(e.type === 'boss' ? 'boss' : 'death');
-          const value = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM * (p.metaXpMul || 1));
+          const xpRushMul = (this.buffs?.xpRush || 0) > 0 ? 2 : 1;
+          const value = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM * (p.metaXpMul || 1) * xpRushMul);
           this.orbs.push(new XpOrb(this, e.x, e.y, value));
-          // Gold drop scales with enemy difficulty
-          const goldGain = Math.max(1, Math.ceil((e.xpVal || 1) * 0.6 * (p.metaGoldMul || 1)));
+          // Gold drop scales with enemy difficulty (× goldRush buff if active)
+          const goldRushMul = (this.buffs?.goldRush || 0) > 0 ? 2 : 1;
+          const goldGain = Math.max(1, Math.ceil((e.xpVal || 1) * 0.6 * (p.metaGoldMul || 1) * goldRushMul));
           this.runGold += goldGain;
           // Combo / killstreak: bump count and refresh the decay window.
           this.comboCount = (this.comboCount || 0) + 1;
