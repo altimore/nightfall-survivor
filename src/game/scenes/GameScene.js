@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GOAL_TIME } from '../config.js';
-import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade } from '../entities.js';
+import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest } from '../entities.js';
 import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES } from '../data.js';
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
@@ -155,6 +155,10 @@ export default class GameScene extends Phaser.Scene {
     this.floating = [];
     this.floatingT = 0;
     this.grenades = [];
+    this.clouds = [];
+    this.cloudT = 0;
+    this.nests = [];
+    this.nestSpawnT = 25;
     this.orbitAngle = 0;
     this.orbitHits = new Map();
     this.trail = [];
@@ -530,6 +534,8 @@ export default class GameScene extends Phaser.Scene {
     this.updateMissiles(dt, p);
     this.updateFloating(dt, p, dmgBoost);
     this.updateGrenades(dt, p);
+    this.updateClouds(dt, p, dmgBoost);
+    this.updateNests(dt, p);
 
     // ── Player projectiles
     for (const proj of this.projectiles) {
@@ -548,6 +554,16 @@ export default class GameScene extends Phaser.Scene {
           if (e.type === 'boss') { this.shake(0.005, 80); this.hitstop = 0.04; }
           if (proj.pierce) proj.hits.add(e);
           else { proj.alive = false; break; }
+        }
+      }
+      // also hit nests
+      if (proj.alive) {
+        for (const n of this.nests) {
+          if (Math.hypot(proj.x - n.x, proj.y - n.y) < n.size + 5) {
+            n.hp -= proj.dmg;
+            this.fxDamage(n.x, n.y, proj.dmg, false);
+            if (!proj.pierce) { proj.alive = false; break; }
+          }
         }
       }
     }
@@ -617,6 +633,7 @@ export default class GameScene extends Phaser.Scene {
     this.drawBg();
     for (const t of this.trail) t.redraw();
     for (const tr of this.traps) tr.redraw();
+    for (const n of this.nests) n.redraw();
     for (const tu of this.turrets) tu.redraw();
     p.redraw();
     for (const it of this.items) it.redraw();
@@ -627,6 +644,7 @@ export default class GameScene extends Phaser.Scene {
     for (const m of this.missiles) m.redraw();
     for (const b of this.floating) b.redraw();
     for (const gr of this.grenades) gr.redraw();
+    for (const c of this.clouds) c.redraw();
     for (const ep of this.eprojectiles) ep.redraw();
     for (const o of this.orbs) o.redraw();
     this.drawOrbits(p);
@@ -921,6 +939,43 @@ export default class GameScene extends Phaser.Scene {
           this.fxCharm(e.x, e.y);
         }
         if (candidates.length > 0) playSfx('itempickup');
+      }
+    }
+
+    const fllv = slv(p, 'flamethrower');
+    if (fllv > 0 && this.enemies.length > 0) {
+      this.weaponT.flamethrower = (this.weaponT.flamethrower || 0) - dt;
+      if (this.weaponT.flamethrower <= 0) {
+        this.weaponT.flamethrower = 0.15;
+        const range = fllv >= 3 ? 180 : 150;
+        const arcDeg = fllv >= 4 ? 100 : fllv >= 2 ? 80 : 60;
+        const arc = arcDeg * Math.PI / 180;
+        const dmg = (8 + (fllv >= 3 ? 4 : 0)) * p.dmgM * dmgBoost * (fllv >= 4 ? 1.3 : 1);
+        let near = null, nd = Infinity;
+        for (const e of this.enemies) {
+          if (e.charmed) continue;
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          if (d < nd) { nd = d; near = e; }
+        }
+        const baseAngle = near ? Math.atan2(near.y - p.y, near.x - p.x) : 0;
+        const angles = fllv >= 5 ? [baseAngle, baseAngle + Math.PI] : [baseAngle];
+        for (const a of angles) {
+          this.applyFlamethrower(p, a, arc, range, dmg);
+          this.fxFlame(p.x, p.y, a, arc, range);
+        }
+      }
+    }
+
+    const cllv = slv(p, 'cloud');
+    if (cllv > 0) {
+      const max = cllv >= 5 ? 4 : cllv >= 4 ? 3 : cllv >= 2 ? 2 : 1;
+      this.cloudT -= dt;
+      if (this.cloudT <= 0 && this.clouds.length < max) {
+        this.cloudT = 4;
+        const c = new StormCloud(this, 0);
+        c.x = p.x + (Math.random() - 0.5) * 200;
+        c.y = p.y - 100 + (Math.random() - 0.5) * 80;
+        this.clouds.push(c);
       }
     }
 
@@ -1497,6 +1552,45 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  updateNests(dt, p) {
+    // Spawn a new nest periodically (max 3 simultaneous)
+    this.nestSpawnT -= dt;
+    if (this.nestSpawnT <= 0 && this.nests.length < 3) {
+      this.nestSpawnT = 35 + Math.random() * 20;
+      // Find a position away from the player
+      let nx = 0, ny = 0, tries = 0;
+      do {
+        nx = 80 + Math.random() * (this.W - 160);
+        ny = 80 + Math.random() * (this.H - 160);
+        tries++;
+      } while (Math.hypot(nx - p.x, ny - p.y) < 220 && tries < 12);
+      const type = Math.random() < 0.5 ? 'cave' : 'cemetery';
+      this.nests.push(new Nest(this, nx, ny, type));
+    }
+    // Tick + spawn children + cleanup
+    this.nests = this.nests.filter(n => {
+      if (n.hp <= 0) {
+        this.fxNova(n.x, n.y, 40);
+        this.shake(0.005, 90);
+        playSfx('death');
+        n.destroy();
+        return false;
+      }
+      n.spawnT -= dt;
+      if (n.spawnT <= 0) {
+        n.spawnT = n.spawnInterval;
+        const t = n.type === 'cave' ? 'bat' : 'skeleton';
+        const tier = Math.floor(this.elapsed / 60);
+        const hpMul = (1 + tier * 0.3) * (this.mode === 'horde' ? 0.6 : 1);
+        const dmgMul = 1 + tier * 0.1;
+        const ang = Math.random() * Math.PI * 2;
+        const child = new Enemy(this, n.x + Math.cos(ang) * 24, n.y + Math.sin(ang) * 24, t, hpMul, 1, dmgMul);
+        this.enemies.push(child);
+      }
+      return true;
+    });
+  }
+
   updateOrbs(dt, p) {
     this.orbs = this.orbs.filter(o => {
       o.life -= dt;
@@ -1681,6 +1775,104 @@ export default class GameScene extends Phaser.Scene {
         break;
       }
     }
+  }
+
+  applyFlamethrower(p, angle, arc, range, dmg) {
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const half = arc / 2;
+    for (const e of this.enemies) {
+      if (e.charmed) continue;
+      const dx = e.x - p.x, dy = e.y - p.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > range + e.size) continue;
+      if (dist < 1) continue;
+      const ea = Math.atan2(dy, dx);
+      let diff = ea - angle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      if (Math.abs(diff) > half) continue;
+      const dealt = e.takeDamage(dmg, 'fire', this);
+      if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+    }
+  }
+
+  fxFlame(x, y, angle, arc, range) {
+    const g = this.add.graphics().setDepth(13);
+    g.x = x; g.y = y;
+    const start = angle - arc / 2;
+    const end = angle + arc / 2;
+    g.fillStyle(0xff3300, 0.25);
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.arc(0, 0, range, start, end, false);
+    g.closePath();
+    g.fillPath();
+    g.fillStyle(0xff8844, 0.45);
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.arc(0, 0, range * 0.7, start + arc * 0.1, end - arc * 0.1, false);
+    g.closePath();
+    g.fillPath();
+    g.fillStyle(0xffe066, 0.55);
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.arc(0, 0, range * 0.4, start + arc * 0.2, end - arc * 0.2, false);
+    g.closePath();
+    g.fillPath();
+    this.tweens.add({
+      targets: g, alpha: 0,
+      duration: 180,
+      onComplete: () => g.destroy(),
+    });
+  }
+
+  updateClouds(dt, p, dmgBoost) {
+    const lvl = slv(p, 'cloud');
+    const dmg = (25 + (lvl >= 3 ? 8 : 0)) * (lvl >= 3 ? 1.3 : 1) * dmgBoost;
+    const interval = lvl >= 3 ? 1.0 : 1.5;
+    this.clouds = this.clouds.filter(c => {
+      // drift
+      c.driftAngle += (Math.random() - 0.5) * 0.4 * dt;
+      c.x += Math.cos(c.driftAngle) * c.driftSpeed * dt;
+      c.y += Math.sin(c.driftAngle) * c.driftSpeed * dt * 0.4;
+      // keep around player
+      const dx = p.x - c.x, dy = p.y - c.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 250) {
+        c.x += dx / d * 60 * dt;
+        c.y += dy / d * 60 * dt;
+      }
+      // fire
+      c.fireT -= dt;
+      if (c.fireT <= 0 && this.enemies.length > 0) {
+        c.fireT = interval;
+        const candidates = this.enemies.filter(e => !e.charmed);
+        if (candidates.length > 0) {
+          const target = candidates[Math.floor(Math.random() * candidates.length)];
+          target.takeDamage(dmg, 'lightning', this);
+          if (p.ls > 0) p.hp = Math.min(p.maxHp, p.hp + dmg * p.ls);
+          this.fxBolt(c.x, c.y, target.x, target.y);
+          // chain on lvl 5
+          if (lvl >= 5) {
+            let prev = target;
+            for (let i = 0; i < 2; i++) {
+              const pool = this.enemies.filter(e => !e.charmed && e !== prev);
+              if (!pool.length) break;
+              let near = null, nd = Infinity;
+              for (const e of pool) {
+                const d2 = Math.hypot(e.x - prev.x, e.y - prev.y);
+                if (d2 < nd) { nd = d2; near = e; }
+              }
+              if (!near || nd > 200) break;
+              near.takeDamage(dmg * 0.7, 'lightning', this);
+              this.fxBolt(prev.x, prev.y, near.x, near.y);
+              prev = near;
+            }
+          }
+        }
+      }
+      return true;
+    });
   }
 
   applyWhipStrike(p, angle, length, width, dmg) {

@@ -1,12 +1,26 @@
 import { ETYPES, ITEMS, STATUS_TEMPLATES } from './data.js';
 
 // ────────────────────────────────────────
+// Default keyboard controller (used by player 0 in solo)
+// ────────────────────────────────────────
+export const DEFAULT_CONTROLLER = {
+  keys: { left: ['A', 'Q', 'LEFT'], right: ['D', 'RIGHT'], up: ['W', 'Z', 'UP'], down: ['S', 'DOWN'], dash: ['SPACE'] },
+  gamepadIndex: 0,
+  joystick: true,
+  color: 0xff4d6d,
+};
+
+export const PLAYER_TINTS = [0xff4d6d, 0x88ddff, 0x80ffdb, 0xffe066];
+
+// ────────────────────────────────────────
 // Player
 // ────────────────────────────────────────
 export class Player {
-  constructor(scene, x, y) {
+  constructor(scene, x, y, id = 0, controller = DEFAULT_CONTROLLER) {
     this.gfx = scene.add.graphics().setDepth(20);
     this.x = x; this.y = y;
+    this.id = id;
+    this.controller = controller;
     this.hp = 100; this.maxHp = 100;
     this.xp = 0; this.level = 1;
     this.skills = { dagger: 1 };
@@ -16,6 +30,26 @@ export class Player {
     this.dashDir = { x: 0, y: 1 };
     this.ls = 0; this.kh = false;
     this.iframes = 0;
+    this.kills = 0;
+    this.dead = false;
+    this.reviveT = 0;
+    this.tint = controller?.color ?? PLAYER_TINTS[id % PLAYER_TINTS.length];
+    // Per-player weapon state
+    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, whip: 0, charm: 0, missile: 0, grenade: 0 };
+    this.orbitAngle = 0;
+    this.orbitHits = new Map();
+    this.lastTrailX = x;
+    this.lastTrailY = y;
+    this.trailHits = new Map();
+    this.trapT = 0;
+    this.minionT = 0;
+    this.gathererT = 0;
+    this.turretT = 0;
+    this.floatingT = 0;
+    this.gpPrev = {};
+    this.joystick = controller?.joystick
+      ? { active: false, id: null, baseX: 0, baseY: 0, thumbX: 0, thumbY: 0, dx: 0, dy: 0 }
+      : null;
   }
   redraw() {
     const g = this.gfx;
@@ -581,6 +615,112 @@ export class TrailTile {
     // glow rim
     g.lineStyle(1.5, 0xb8ff66, 0.5 * fade);
     g.strokeCircle(0, 0, r);
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
+// Nest — stationary spawner with HP. Cave → bats, Cemetery → skeletons.
+// ────────────────────────────────────────
+export class Nest {
+  constructor(scene, x, y, type) {
+    this.gfx = scene.add.graphics().setDepth(4);
+    this.x = x; this.y = y;
+    this.type = type; // 'cave' | 'cemetery'
+    this.maxHp = type === 'cave' ? 100 : 150;
+    this.hp = this.maxHp;
+    this.size = 24;
+    this.spawnT = 5;
+    this.spawnInterval = type === 'cave' ? 4 : 6;
+    this.bob = 0;
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    this.bob += 0.04;
+    if (this.type === 'cave') {
+      g.fillStyle(0x000000, 0.6);
+      g.fillEllipse(0, 6, 56, 18);
+      g.fillStyle(0x1a0e08, 1);
+      g.fillEllipse(0, -2, 50, 36);
+      g.fillStyle(0x000000, 1);
+      g.fillEllipse(0, 0, 38, 26);
+      g.fillStyle(0x3a2a20, 1);
+      g.fillCircle(-19, 10, 7);
+      g.fillCircle(18, 11, 6);
+      g.fillCircle(-2, 16, 5);
+      g.fillCircle(8, -10, 4);
+      g.fillCircle(-10, -12, 4);
+      // glowing eyes inside the cave
+      const flick = 0.6 + Math.sin(this.bob * 4) * 0.3;
+      g.fillStyle(0xff4400, flick);
+      g.fillCircle(-5, 2, 1.6);
+      g.fillCircle(5, 2, 1.6);
+    } else {
+      // cemetery crypt — large tombstone with cracks and skull
+      g.fillStyle(0x000000, 0.55);
+      g.fillEllipse(0, 22, 56, 12);
+      g.fillStyle(0x1a1a25, 1);
+      g.fillRoundedRect(-22, -28, 44, 50, 20);
+      g.fillStyle(0x2e2e3c, 0.9);
+      g.fillRoundedRect(-19, -25, 38, 44, 18);
+      g.lineStyle(1.5, 0x0a0a14, 0.75);
+      g.beginPath(); g.moveTo(-9, -12); g.lineTo(-11, 6); g.strokePath();
+      g.beginPath(); g.moveTo(9, -6); g.lineTo(13, 10); g.strokePath();
+      // engraved skull
+      g.fillStyle(0x000000, 1);
+      g.fillCircle(0, -9, 6.5);
+      g.fillRect(-3, -3, 6, 4);
+      g.fillStyle(0x6a6a7a, 1);
+      g.fillCircle(-2.4, -10, 1.4);
+      g.fillCircle(2.4, -10, 1.4);
+    }
+    // hp bar
+    g.fillStyle(0x220006, 0.85);
+    g.fillRect(-24, -this.size - 16, 48, 5);
+    g.fillStyle(this.type === 'cave' ? 0xff4400 : 0xff0000, 1);
+    g.fillRect(-24, -this.size - 16, 48 * Math.max(0, this.hp / this.maxHp), 5);
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
+// Storm cloud — drifts above the player, periodically strikes a random enemy.
+// ────────────────────────────────────────
+export class StormCloud {
+  constructor(scene, dmg) {
+    this.gfx = scene.add.graphics().setDepth(13);
+    this.x = 0; this.y = 0;
+    this.dmg = dmg;
+    this.driftAngle = Math.random() * Math.PI * 2;
+    this.driftSpeed = 18 + Math.random() * 10;
+    this.bob = Math.random() * Math.PI * 2;
+    this.fireT = 0.5 + Math.random();
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    this.bob += 0.06;
+    const f = Math.sin(this.bob) * 1.5;
+    // shadow on ground
+    g.fillStyle(0x000000, 0.18);
+    g.fillEllipse(0, 16, 28, 8);
+    // cloud body — 4 overlapping circles
+    g.fillStyle(0x3a3a4a, 0.85);
+    g.fillCircle(-9, f, 8);
+    g.fillCircle(0, f - 3, 10);
+    g.fillCircle(9, f, 8);
+    g.fillCircle(0, f + 3, 9);
+    g.fillStyle(0x5a5a6a, 0.9);
+    g.fillCircle(-6, f - 2, 6);
+    g.fillCircle(5, f - 2, 6);
+    // tiny lightning flicker hint
+    g.fillStyle(0xffe066, 0.45);
+    g.fillCircle(0, f + 6, 2);
   }
   destroy() { this.gfx.destroy(); }
 }
