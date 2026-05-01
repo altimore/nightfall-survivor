@@ -8,6 +8,7 @@ import EndScreen from './ui/EndScreen.jsx';
 import LevelUpScreen from './ui/LevelUpScreen.jsx';
 import BossTitle from './ui/BossTitle.jsx';
 import PauseMenu from './ui/PauseMenu.jsx';
+import Compendium from './ui/Compendium.jsx';
 
 export default function App() {
   const containerRef = useRef(null);
@@ -154,7 +155,8 @@ export default function App() {
       {bossAnnounce && phase === 'playing' && (
         <BossTitle key={bossAnnounce.key} name={bossAnnounce.name} onDone={() => setBossAnnounce(null)} />
       )}
-      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} uiScale={uiScale} setUiScale={setUiScale} />}
+      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} />}
+      {phase === 'compendium' && <Compendium onClose={() => setPhase('menu')} />}
       {phase === 'levelup' && (
         <LevelUpScreen lv={levelUp.lv} choices={levelUp.choices} skills={hud.skills} onPick={pickSkill} />
       )}

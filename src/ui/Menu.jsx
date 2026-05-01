@@ -8,7 +8,7 @@ import { playSfx } from '../game/audio.js';
 // Starter weapons : utility powers like 'gather' are excluded — they can't kill on their own.
 const WEAPONS = ['dagger', 'sword', 'whip', 'nova', 'lightning', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
 
-export default function Menu({ onStart, weapon, onWeaponChange, uiScale, setUiScale }) {
+export default function Menu({ onStart, weapon, onWeaponChange, uiScale, setUiScale, onOpenGuide }) {
   const t = useT();
   const lang = getLang();
   const pickWeapon = id => { if (id !== weapon) playSfx('uimove'); onWeaponChange(id); };
@@ -133,14 +133,28 @@ export default function Menu({ onStart, weapon, onWeaponChange, uiScale, setUiSc
           </div>
         </div>
 
-        <button onClick={startWithSfx} style={{
-          padding: '0.9em 2.8em',
-          background: 'linear-gradient(135deg,#5a189a,#3c096c)',
-          border: '1px solid #c77dff', color: '#e0aaff',
-          fontFamily: "'Cinzel',serif", fontSize: '1.36em', letterSpacing: 4,
-          cursor: 'pointer', borderRadius: 3,
-          boxShadow: '0 0 30px rgba(123,47,190,.5)',
-        }}>{t('menu.start')}</button>
+        <div style={{ display: 'flex', gap: '0.7em', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button onClick={startWithSfx} style={{
+            padding: '0.9em 2.8em',
+            background: 'linear-gradient(135deg,#5a189a,#3c096c)',
+            border: '1px solid #c77dff', color: '#e0aaff',
+            fontFamily: "'Cinzel',serif", fontSize: '1.36em', letterSpacing: 4,
+            cursor: 'pointer', borderRadius: 3,
+            boxShadow: '0 0 30px rgba(123,47,190,.5)',
+          }}>{t('menu.start')}</button>
+          {onOpenGuide && (
+            <button
+              onClick={() => { playSfx('uipick'); onOpenGuide(); }}
+              style={{
+                padding: '0.55em 1.4em',
+                background: 'transparent',
+                border: '1px solid #6c3483', color: '#b69ad8',
+                fontFamily: "'Cinzel',serif", fontSize: '0.95em', letterSpacing: 3,
+                cursor: 'pointer', borderRadius: 3,
+              }}
+            >{t('compendium.open')}</button>
+          )}
+        </div>
 
         {setUiScale && (
           <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.7em' }}>

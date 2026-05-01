@@ -427,14 +427,39 @@ export default class GameScene extends Phaser.Scene {
       return true;
     });
 
-    // ── Enemy AI + collision
+    // ── Enemy AI + collision (vs. player, minions, charmed allies)
     for (const e of this.enemies) {
       this.updateEnemyAi(dt, e, p, freezeMult);
-      if (!e.charmed && !shielded && p.iframes <= 0 && Math.hypot(e.x - p.x, e.y - p.y) < e.size + 14) {
+      if (e.charmed) continue;
+      // player hit
+      if (!shielded && p.iframes <= 0 && Math.hypot(e.x - p.x, e.y - p.y) < e.size + 14) {
         p.hp -= e.dmg;
         p.iframes = 0.9;
         playSfx('hit');
         this.shake(0.007, 130);
+      }
+      // melee against minions & charmed (cooldown-gated to avoid 1-frame chunks)
+      e.atkCD = Math.max(0, (e.atkCD || 0) - dt);
+      if (e.atkCD <= 0) {
+        let hit = false;
+        for (const m of this.minions) {
+          if (Math.hypot(e.x - m.x, e.y - m.y) < e.size + m.size) {
+            m.hp -= e.dmg;
+            hit = true;
+            break;
+          }
+        }
+        if (!hit) {
+          for (const o of this.enemies) {
+            if (!o.charmed || o === e) continue;
+            if (Math.hypot(e.x - o.x, e.y - o.y) < e.size + o.size) {
+              o.hp -= e.dmg;
+              hit = true;
+              break;
+            }
+          }
+        }
+        if (hit) e.atkCD = 0.6;
       }
     }
 
@@ -595,7 +620,7 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  updateEnemyAi(dt, e, p, freezeMult) {
+  updateEnemyAi(dt, e, player, freezeMult) {
     e.tickStatuses(dt, this);
     if (e.charmed) {
       e.charmedDur -= dt;
@@ -605,6 +630,23 @@ export default class GameScene extends Phaser.Scene {
       }
       this.updateCharmedAi(dt, e);
       return;
+    }
+    // Pick aggressive target: prefer a closer ally (turret / minion / charmed enemy)
+    // over the player when noticeably nearer.
+    let p = player;
+    let bestD = Math.hypot(player.x - e.x, player.y - e.y);
+    for (const tu of this.turrets) {
+      const d = Math.hypot(tu.x - e.x, tu.y - e.y);
+      if (d < bestD * 0.85 && d < 320) { bestD = d; p = tu; }
+    }
+    for (const m of this.minions) {
+      const d = Math.hypot(m.x - e.x, m.y - e.y);
+      if (d < bestD * 0.85 && d < 280) { bestD = d; p = m; }
+    }
+    for (const o of this.enemies) {
+      if (!o.charmed || o === e) continue;
+      const d = Math.hypot(o.x - e.x, o.y - e.y);
+      if (d < bestD * 0.85 && d < 280) { bestD = d; p = o; }
     }
     const dx = p.x - e.x, dy = p.y - e.y;
     const dist = Math.hypot(dx, dy);
@@ -1114,11 +1156,11 @@ export default class GameScene extends Phaser.Scene {
       this.turretT -= dt;
       if (this.turretT <= 0 && this.turrets.length < max) {
         this.turretT = interval;
-        const hp = (60 + lvl * 12) * (lvl >= 4 ? 1.5 : 1);
-        const dmg = (12 + lvl * 4) * p.dmgM;
-        const range = 200 * (lvl >= 3 ? 1.5 : 1);
+        const hp = (40 + lvl * 10) * (lvl >= 4 ? 1.5 : 1);
+        const dmg = (6 + lvl * 2) * p.dmgM;
+        const range = (140 + lvl * 15) * (lvl >= 3 ? 1.3 : 1);
         const dmgType = lvl >= 5 ? 'fire' : lvl >= 3 ? 'lightning' : 'physical';
-        const fireRate = lvl >= 5 ? 0.4 : 0.8;
+        const fireRate = lvl >= 5 ? 0.5 : lvl >= 3 ? 0.8 : 1.1;
         const a = Math.random() * Math.PI * 2;
         const t = new Turret(this, p.x + Math.cos(a) * 55, p.y + Math.sin(a) * 55, hp, dmg, range, dmgType, fireRate);
         t.coreColor = dmgType === 'fire' ? 0xff7733 : dmgType === 'lightning' ? 0xffe066 : 0x88aaff;

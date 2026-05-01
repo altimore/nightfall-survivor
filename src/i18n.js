@@ -45,6 +45,23 @@ const dicts = {
     boss: {
       tag: '⚠ BOSS ⚠',
     },
+    compendium: {
+      title: 'GUIDE',
+      open: '📖 GUIDE',
+      back: 'RETOUR',
+      weapons: 'ARMES',
+      passives: 'PASSIFS',
+      enemies: 'ENNEMIS',
+      items: 'ITEMS',
+      hint: 'ÉCHAP / B pour revenir',
+      hp: 'PV',
+      speed: 'Vit.',
+      damage: 'Dgt',
+      behavior: 'Comportement',
+      unlocksAt: 'apparaît à',
+      seconds: 's',
+      level: 'Niv.',
+    },
   },
   en: {
     menu: {
@@ -89,6 +106,23 @@ const dicts = {
     },
     boss: {
       tag: '⚠ BOSS ⚠',
+    },
+    compendium: {
+      title: 'GUIDE',
+      open: '📖 GUIDE',
+      back: 'BACK',
+      weapons: 'WEAPONS',
+      passives: 'PASSIVES',
+      enemies: 'ENEMIES',
+      items: 'ITEMS',
+      hint: 'ESC / B to go back',
+      hp: 'HP',
+      speed: 'Spd',
+      damage: 'Dmg',
+      behavior: 'Behaviour',
+      unlocksAt: 'appears at',
+      seconds: 's',
+      level: 'Lv.',
     },
   },
 };
