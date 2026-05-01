@@ -207,6 +207,9 @@ export const EVOLUTIONS = {
   whip:      { name:'Lacération Mortelle',  icon:'⚜️', color:'#d4a4ff', requires:'amulet', desc:'Fouet évolué : 4 directions, portée ×1.5, dégâts ×1.5' },
   missile:   { name:'Salve Apocalyptique',  icon:'🔥', color:'#ff8844', requires:'tome',   desc:'Missiles évolués : +3 missiles, AoE ×1.5, cadence ×1.4' },
   orbit:     { name:'Couronne du Néant',    icon:'✴️', color:'#b894ff', requires:'amulet', desc:'Orbes évolués : +2 orbes, dégâts ×1.5, rayon étendu' },
+  bow:       { name:'Pluie de Flèches',     icon:'🌟', color:'#88ff88', requires:'tome',   desc:'Arc évolué : +3 flèches, AoE à l\'impact, dégâts ×1.5' },
+  boomerang: { name:'Cyclone Lame',          icon:'🌪️', color:'#ffaa44', requires:'boots',  desc:'Boomerang évolué : +2 lames, vitesse ×1.4, dégâts ×1.5' },
+  iceRing:   { name:'Tempête Polaire',      icon:'🌨️', color:'#88ddff', requires:'heart',  desc:'Cercle évolué : double rayon, gel ×2s, dégâts ×1.5' },
 };
 
 // Returns evolution ids available right now: weapon at max + required passive at max + not already evolved.

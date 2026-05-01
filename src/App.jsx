@@ -11,6 +11,7 @@ import PauseMenu from './ui/PauseMenu.jsx';
 import Compendium from './ui/Compendium.jsx';
 import InventoryOverlay from './ui/InventoryOverlay.jsx';
 import Shop from './ui/Shop.jsx';
+import Settings from './ui/Settings.jsx';
 import { useGamepadActions } from './ui/useGamepad.js';
 
 export default function App() {
@@ -217,9 +218,10 @@ export default function App() {
       {bossAnnounce && phase === 'playing' && (
         <BossTitle key={bossAnnounce.key} name={bossAnnounce.name} onDone={() => setBossAnnounce(null)} />
       )}
-      {phase === 'menu' && <Menu onStart={start} onStartDaily={startDaily} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} character={character} onCharacterChange={setCharacter} biome={biome} onBiomeChange={setBiome} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} onOpenShop={() => setPhase('shop')} />}
+      {phase === 'menu' && <Menu onStart={start} onStartDaily={startDaily} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} character={character} onCharacterChange={setCharacter} biome={biome} onBiomeChange={setBiome} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} onOpenShop={() => setPhase('shop')} onOpenSettings={() => setPhase('settings')} />}
       {phase === 'compendium' && <Compendium onClose={() => setPhase('menu')} />}
       {phase === 'shop' && <Shop onClose={() => setPhase('menu')} />}
+      {phase === 'settings' && <Settings onClose={() => setPhase('menu')} />}
       {phase === 'levelup' && (
         <LevelUpScreen
           lv={levelUp.lv}

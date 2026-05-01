@@ -27,14 +27,111 @@ const BOSS_NAMES = [
 // Background decoration drawers — cemetery / haunted ruins style.
 // Each takes the bg Graphics and draws once around (cx, cy).
 // ────────────────────────────────────────
-function drawDecor(g, cx, cy, type, hash) {
+function drawDecor(g, cx, cy, type, hash, biomeId) {
   const variant = (hash >>> 16) & 0xff;
+  if (biomeId === 'forest') {
+    switch (type) {
+      case 0: drawDeadTree(g, cx, cy, variant); break;
+      case 1: drawDeadTree(g, cx, cy, variant); break;
+      case 2: drawMushroom(g, cx, cy, variant); break;
+      default: drawStones(g, cx, cy, variant);
+    }
+    return;
+  }
+  if (biomeId === 'dungeon') {
+    switch (type) {
+      case 0: drawBrokenPillar(g, cx, cy, variant); break;
+      case 1: drawTorch(g, cx, cy, variant); break;
+      case 2: drawStones(g, cx, cy, variant); break;
+      default: drawBrokenPillar(g, cx, cy, variant);
+    }
+    return;
+  }
+  if (biomeId === 'abyss') {
+    switch (type) {
+      case 0: drawCrystal(g, cx, cy, variant); break;
+      case 1: drawVoidRift(g, cx, cy, variant); break;
+      case 2: drawCrystal(g, cx, cy, variant); break;
+      default: drawStones(g, cx, cy, variant);
+    }
+    return;
+  }
+  // cemetery (default)
   switch (type) {
     case 0: drawCross(g, cx, cy, variant); break;
     case 1: drawTombstone(g, cx, cy, variant); break;
     case 2: drawDeadTree(g, cx, cy, variant); break;
     default: drawStones(g, cx, cy, variant);
   }
+}
+
+// Forest mushroom : red cap with white spots
+function drawMushroom(g, cx, cy, v) {
+  const h = 14 + (v & 0x07);
+  g.fillStyle(0x000000, 0.3); g.fillEllipse(cx, cy + 4, 14, 4);
+  // stem
+  g.fillStyle(0xd8c8a8, 0.85); g.fillRect(cx - 2, cy - h, 4, h);
+  // cap
+  g.fillStyle(0x8a1a1a, 0.85); g.fillEllipse(cx, cy - h, 18, 9);
+  // spots
+  g.fillStyle(0xfff0d8, 0.85);
+  g.fillCircle(cx - 4, cy - h - 1, 1.5);
+  g.fillCircle(cx + 4, cy - h, 1.4);
+  g.fillCircle(cx - 1, cy - h + 2, 1);
+}
+
+// Dungeon broken pillar : stacked stones + cracked top
+function drawBrokenPillar(g, cx, cy, v) {
+  const h = 22 + (v & 0x0f);
+  g.fillStyle(0x000000, 0.35); g.fillEllipse(cx, cy + 5, 20, 5);
+  g.fillStyle(0x4a3a2a, 0.85);
+  g.fillRect(cx - 8, cy - 6, 16, 6); // base
+  g.fillStyle(0x6a5a3a, 0.7);
+  g.fillRect(cx - 7, cy - h * 0.5, 14, 6); // mid
+  g.fillStyle(0x4a3a2a, 0.65);
+  g.fillRect(cx - 6, cy - h, 12, 6); // top broken
+  // crack
+  g.lineStyle(1, 0x222218, 0.6);
+  g.beginPath(); g.moveTo(cx - 4, cy - h + 2); g.lineTo(cx + 3, cy - h + 6); g.strokePath();
+}
+
+// Dungeon torch : pole + flame
+function drawTorch(g, cx, cy, v) {
+  const h = 26 + (v & 0x0f);
+  g.fillStyle(0x000000, 0.35); g.fillEllipse(cx, cy + 4, 10, 3);
+  g.fillStyle(0x2a1810, 0.85); g.fillRect(cx - 1.5, cy - h, 3, h);
+  // flame
+  const flick = (v & 0x07) / 7;
+  g.fillStyle(0xff6633, 0.7);
+  g.fillTriangle(cx - 4, cy - h + 2, cx, cy - h - 7 - flick * 2, cx + 4, cy - h + 2);
+  g.fillStyle(0xffaa44, 0.95);
+  g.fillTriangle(cx - 2.5, cy - h + 1, cx, cy - h - 5 - flick, cx + 2.5, cy - h + 1);
+}
+
+// Abyss crystal : floating tinted shard
+function drawCrystal(g, cx, cy, v) {
+  const h = 16 + (v & 0x0f);
+  g.fillStyle(0x000000, 0.3); g.fillEllipse(cx, cy + 4, 12, 3);
+  g.fillStyle(0x4438aa, 0.85);
+  g.fillTriangle(cx - 6, cy - 3, cx + 6, cy - 3, cx, cy - h);
+  g.fillStyle(0x8870ff, 0.7);
+  g.fillTriangle(cx - 3, cy - 6, cx + 3, cy - 6, cx, cy - h + 2);
+  // glow
+  g.lineStyle(1, 0xa090ff, 0.55);
+  g.strokeCircle(cx, cy - h * 0.55, h * 0.55);
+}
+
+// Abyss void rift : dark cloud + purple core
+function drawVoidRift(g, cx, cy, v) {
+  const r = 14 + (v & 0x07);
+  g.fillStyle(0x000000, 0.55);
+  g.fillEllipse(cx, cy, r * 1.3, r);
+  g.fillStyle(0x180828, 0.9);
+  g.fillEllipse(cx, cy, r, r * 0.7);
+  // sparkles
+  g.fillStyle(0xffffff, 0.6);
+  g.fillCircle(cx + Math.sin(v) * r * 0.6, cy + Math.cos(v) * r * 0.5, 0.9);
+  g.fillCircle(cx - Math.sin(v * 1.3) * r * 0.5, cy - Math.cos(v * 1.7) * r * 0.4, 0.9);
 }
 
 function drawCross(g, cx, cy, v) {
@@ -1769,11 +1866,12 @@ export default class GameScene extends Phaser.Scene {
 
     // ── Bow — high-damage piercing arrow toward farthest enemy
     const blv = slv(p, 'bow');
+    const evoBow = p.evolved?.has('bow');
     if (blv > 0) {
       p.weaponT.bow = (p.weaponT.bow || 0) - dt;
       if (p.weaponT.bow <= 0 && this.enemies.length > 0) {
-        p.weaponT.bow = blv >= 4 ? 0.7 : blv >= 2 ? 1.0 : 1.5;
-        const count = blv >= 5 ? 3 : blv >= 3 ? 2 : 1;
+        p.weaponT.bow = (blv >= 4 ? 0.7 : blv >= 2 ? 1.0 : 1.5) / (evoBow ? 1.3 : 1);
+        const count = (blv >= 5 ? 3 : blv >= 3 ? 2 : 1) + (evoBow ? 3 : 0);
         const dmg = (40 + blv * 15) * p.dmgM * dmgBoost * (blv >= 4 ? 1.3 : 1);
         let near = null, nd = Infinity;
         for (const e of this.enemies) {
@@ -1794,12 +1892,13 @@ export default class GameScene extends Phaser.Scene {
 
     // ── Boomerang — out-and-return spinning blade
     const bmlv = slv(p, 'boomerang');
+    const evoBoomerang = p.evolved?.has('boomerang');
     if (bmlv > 0) {
       p.weaponT.boomerang = (p.weaponT.boomerang || 0) - dt;
       if (p.weaponT.boomerang <= 0) {
-        p.weaponT.boomerang = bmlv >= 3 ? 1.5 : 2.0;
-        const count = bmlv >= 5 ? 4 : bmlv >= 4 ? 3 : bmlv >= 2 ? 2 : 1;
-        const range = (160 + bmlv * 25) * (bmlv >= 4 ? 1.3 : 1);
+        p.weaponT.boomerang = (bmlv >= 3 ? 1.5 : 2.0) / (evoBoomerang ? 1.4 : 1);
+        const count = (bmlv >= 5 ? 4 : bmlv >= 4 ? 3 : bmlv >= 2 ? 2 : 1) + (evoBoomerang ? 2 : 0);
+        const range = (160 + bmlv * 25) * (bmlv >= 4 ? 1.3 : 1) * (evoBoomerang ? 1.2 : 1);
         const dmg = (18 + bmlv * 8) * p.dmgM * dmgBoost * (bmlv >= 3 ? 1.3 : 1);
         // Aim at nearest enemy; fan out for multi
         let near = null, nd = Infinity;
@@ -1818,13 +1917,14 @@ export default class GameScene extends Phaser.Scene {
 
     // ── IceRing — expanding frost wave
     const ilv = slv(p, 'iceRing');
+    const evoIceRing = p.evolved?.has('iceRing');
     if (ilv > 0) {
       p.weaponT.iceRing = (p.weaponT.iceRing || 0) - dt;
       if (p.weaponT.iceRing <= 0) {
-        p.weaponT.iceRing = ilv >= 3 ? 2.3 : 3.0;
-        const r = (90 + ilv * 22) * (ilv >= 2 ? 1.25 : 1);
+        p.weaponT.iceRing = (ilv >= 3 ? 2.3 : 3.0) / (evoIceRing ? 1.2 : 1);
+        const r = (90 + ilv * 22) * (ilv >= 2 ? 1.25 : 1) * (evoIceRing ? 2 : 1);
         const dmg = (15 + ilv * 8) * p.dmgM * dmgBoost * (ilv >= 5 ? 1.5 : 1);
-        const freezeDur = ilv >= 5 ? 2 : ilv >= 2 ? 1.4 : 1;
+        const freezeDur = (ilv >= 5 ? 2 : ilv >= 2 ? 1.4 : 1) + (evoIceRing ? 2 : 0);
         const pulses = ilv >= 5 ? 3 : ilv >= 4 ? 2 : 1;
         for (let k = 0; k < pulses; k++) {
           this.time.delayedCall(k * 220, () => {
@@ -2771,7 +2871,7 @@ export default class GameScene extends Phaser.Scene {
     // Apply evolution multiplier if the weapon has been evolved (1.6× by default; 1.8× for sword, 1.5× for whip/cloud, etc.)
     let evoMul = 1;
     if (sourcePlayer && weaponId && sourcePlayer.evolved instanceof Set && sourcePlayer.evolved.has(weaponId)) {
-      const EVO_MUL = { sword: 1.8, dagger: 1.6, nova: 1.6, lightning: 1.5, whip: 1.5, cloud: 1.4, missile: 1.5, orbit: 1.5 };
+      const EVO_MUL = { sword: 1.8, dagger: 1.6, nova: 1.6, lightning: 1.5, whip: 1.5, cloud: 1.4, missile: 1.5, orbit: 1.5, bow: 1.5, boomerang: 1.5, iceRing: 1.5 };
       evoMul = EVO_MUL[weaponId] || 1.5;
     }
     let finalAmount = amount * evoMul;
@@ -3416,7 +3516,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // Decorations (fixed positions, generated once per scene/resize)
-    for (const d of this.decorations) drawDecor(g, d.x, d.y, d.type, d.hash);
+    for (const d of this.decorations) drawDecor(g, d.x, d.y, d.type, d.hash, this.biomeId);
 
     // Mist — animated (movement is intentional, slow ambient drift), biome-tinted
     g.fillStyle(biome.accent, 0.07);

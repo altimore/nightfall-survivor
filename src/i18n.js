@@ -90,6 +90,16 @@ const dicts = {
       back: 'RETOUR',
       hint: 'L\'or se gagne en tuant des ennemis · ÉCHAP / B pour fermer',
     },
+    settings: {
+      title: 'OPTIONS',
+      open: 'OPTIONS',
+      back: 'RETOUR',
+      sfx: 'Effets sonores',
+      music: 'Musique',
+      haptics: 'Vibration mobile',
+      on: 'ACTIF', off: 'INACTIF',
+      hint: 'ÉCHAP / B pour fermer',
+    },
     inventory: {
       title: 'INVENTAIRE',
       stats: 'STATS',
@@ -216,6 +226,16 @@ const dicts = {
       open: 'SHOP',
       back: 'BACK',
       hint: 'Earn gold by killing enemies · ESC / B to close',
+    },
+    settings: {
+      title: 'SETTINGS',
+      open: 'SETTINGS',
+      back: 'BACK',
+      sfx: 'Sound effects',
+      music: 'Music',
+      haptics: 'Mobile haptics',
+      on: 'ON', off: 'OFF',
+      hint: 'ESC / B to close',
     },
     inventory: {
       title: 'INVENTORY',

@@ -4,14 +4,40 @@ let muted = false;
 let musicTimer = null;
 let currentVariant = null;
 
+// Volumes (0..1). Persisted via setSfxVolume / setMusicVolume.
+let sfxVolume = 1.0;
+let musicVolume = 1.0;
+let hapticsEnabled = true;
+const SETTINGS_KEY = 'nightfall:settings:v1';
+
+try {
+  if (typeof localStorage !== 'undefined') {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (typeof s.sfxVolume === 'number') sfxVolume = Math.max(0, Math.min(1, s.sfxVolume));
+      if (typeof s.musicVolume === 'number') musicVolume = Math.max(0, Math.min(1, s.musicVolume));
+      if (typeof s.hapticsEnabled === 'boolean') hapticsEnabled = s.hapticsEnabled;
+    }
+  }
+} catch (_) {}
+
+function persistSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sfxVolume, musicVolume, hapticsEnabled })); } catch (_) {}
+}
+
 export function initAudio() {
   if (audio) return audio;
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const master = ctx.createGain(); master.gain.value = 0.32;
-  const comp = ctx.createDynamicsCompressor();
-  comp.threshold.value = -18; comp.ratio.value = 4;
-  master.connect(comp); comp.connect(ctx.destination);
-  audio = { ctx, master };
+  const masterOut = ctx.createDynamicsCompressor();
+  masterOut.threshold.value = -18; masterOut.ratio.value = 4;
+  masterOut.connect(ctx.destination);
+  // Two independent gain nodes for SFX and music.
+  const sfxGain = ctx.createGain(); sfxGain.gain.value = 0.32 * sfxVolume;
+  const musicGain = ctx.createGain(); musicGain.gain.value = 0.32 * musicVolume;
+  sfxGain.connect(masterOut); musicGain.connect(masterOut);
+  // Keep `master` as the SFX bus alias for back-compat with tone/noiseBlast/etc.
+  audio = { ctx, master: sfxGain, sfxGain, musicGain };
   return audio;
 }
 
@@ -21,6 +47,23 @@ export function setMuted(v) {
 }
 export const isMuted = () => muted;
 export const currentMusicVariant = () => currentVariant;
+
+export function getSettings() { return { sfxVolume, musicVolume, hapticsEnabled }; }
+export function setSfxVolume(v) {
+  sfxVolume = Math.max(0, Math.min(1, v));
+  if (audio?.sfxGain) audio.sfxGain.gain.value = 0.32 * sfxVolume;
+  persistSettings();
+}
+export function setMusicVolume(v) {
+  musicVolume = Math.max(0, Math.min(1, v));
+  if (audio?.musicGain) audio.musicGain.gain.value = 0.32 * musicVolume;
+  persistSettings();
+}
+export function setHapticsEnabled(v) {
+  hapticsEnabled = !!v;
+  persistSettings();
+}
+export const isHapticsEnabled = () => hapticsEnabled;
 
 function tone(a, freq, type, atk, sus, rel, vol = 0.3, off = 0) {
   const t = a.ctx.currentTime + off;
@@ -101,7 +144,7 @@ const HAPTICS = {
 export function playSfx(name) {
   if (muted || !audio) return;
   SFX_FNS[name]?.(audio);
-  HAPTICS[name]?.();
+  if (hapticsEnabled) HAPTICS[name]?.();
 }
 
 // ────────────────────────────────────────
@@ -168,7 +211,8 @@ export function startMusic(variant = 'normal') {
   const cfg = MUSIC_VARIANTS[variant] || MUSIC_VARIANTS.normal;
   currentVariant = variant;
   const beatS = 60 / cfg.bpm;
-  const a = audio;
+  // Re-route music helpers (tone/noiseBlast) to musicGain so volume sliders are independent.
+  const a = { ctx: audio.ctx, master: audio.musicGain || audio.master };
   let step = 0;
   let nextT = audio.ctx.currentTime + 0.05;
   const schedule = () => {
