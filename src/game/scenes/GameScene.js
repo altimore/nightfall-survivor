@@ -1306,11 +1306,29 @@ export default class GameScene extends Phaser.Scene {
           e.y = p.y + (Math.random() - 0.5) * 300;
         }
         e.shootTimer = (e.shootTimer ?? 2) - dt;
+        // Phase scaling — boss accelerates and becomes more aggressive at low HP.
+        const hpFrac = Math.max(0, e.hp / e.maxHp);
+        const phase = hpFrac > 0.5 ? 1 : hpFrac > 0.25 ? 2 : 3;
+        const phaseSpeedMul = phase === 3 ? 0.5 : phase === 2 ? 0.75 : 1;
         if (e.shootTimer <= 0) {
           e.shootCount = (e.shootCount || 0) + 1;
           const pattern = e.shootCount % 6;
-          e.shootTimer = pattern === 1 || pattern === 4 ? 2.8 : pattern === 2 || pattern === 5 ? 1.7 : 2.5;
+          const baseT = pattern === 1 || pattern === 4 ? 2.8 : pattern === 2 || pattern === 5 ? 1.7 : 2.5;
+          e.shootTimer = baseT * phaseSpeedMul;
           this.fireBossPattern(e, p, pattern);
+          // Phase 2+ : extra burst. Phase 3: also summon an add every other shoot.
+          if (phase >= 2) {
+            this.time.delayedCall(420, () => {
+              if (e.hp <= 0) return;
+              this.fireBossPattern(e, p, (pattern + 3) % 6);
+            });
+          }
+          if (phase === 3 && (e.shootCount % 2) === 0) {
+            // Summon a random support add (knight or witch) at boss position
+            const addType = Math.random() < 0.5 ? 'skeleton' : 'witch';
+            const add = new Enemy(this, e.x, e.y - 24, addType, 1.5, 1, 1);
+            this.enemies.push(add);
+          }
           playSfx('eprojshoot');
         }
         break;
