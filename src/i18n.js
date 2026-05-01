@@ -10,7 +10,7 @@ const dicts = {
       start: 'COMMENCER',
       textSize: 'TAILLE TEXTE',
       lang: 'LANGUE',
-      controls: '🎮 ZQSD/WASD/Flèches · Espace = Dash · 📱 Joystick + 2ᵉ doigt = Dash',
+      controls: '🎮 ZQSD/WASD/Flèches · Espace = Dash · I = Inventaire · ÉCHAP = Pause · 📱 Joystick + 2ᵉ doigt = Dash',
       version: 'v0.5 · Phaser 4 · 7 ennemis · 9 pouvoirs · 6 items · 4 boss',
     },
     end: {
@@ -62,6 +62,16 @@ const dicts = {
       seconds: 's',
       level: 'Niv.',
     },
+    inventory: {
+      title: 'INVENTAIRE',
+      stats: 'STATS',
+      activeBuffs: 'BUFFS ACTIFS',
+      hint: 'I / ÉCHAP pour fermer',
+      regen: 'Régen',
+      lifesteal: 'Vol de vie',
+      magnet: 'Magnet',
+      dash: 'Dash',
+    },
     skills: {
       dagger: 'Dague Spectrale',
       sword: 'Épée Spectrale',
@@ -93,7 +103,7 @@ const dicts = {
       start: 'START',
       textSize: 'TEXT SIZE',
       lang: 'LANGUAGE',
-      controls: '🎮 ZQSD/WASD/Arrows · Space = Dash · 📱 Joystick + 2nd finger = Dash',
+      controls: '🎮 ZQSD/WASD/Arrows · Space = Dash · I = Inventory · ESC = Pause · 📱 Joystick + 2nd finger = Dash',
       version: 'v0.5 · Phaser 4 · 7 enemies · 9 powers · 6 items · 4 bosses',
     },
     end: {
@@ -144,6 +154,16 @@ const dicts = {
       unlocksAt: 'appears at',
       seconds: 's',
       level: 'Lv.',
+    },
+    inventory: {
+      title: 'INVENTORY',
+      stats: 'STATS',
+      activeBuffs: 'ACTIVE BUFFS',
+      hint: 'I / ESC to close',
+      regen: 'Regen',
+      lifesteal: 'Lifesteal',
+      magnet: 'Magnet',
+      dash: 'Dash',
     },
     skills: {
       dagger: 'Spectral Dagger',

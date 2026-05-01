@@ -9,6 +9,7 @@ import LevelUpScreen from './ui/LevelUpScreen.jsx';
 import BossTitle from './ui/BossTitle.jsx';
 import PauseMenu from './ui/PauseMenu.jsx';
 import Compendium from './ui/Compendium.jsx';
+import InventoryOverlay from './ui/InventoryOverlay.jsx';
 
 export default function App() {
   const containerRef = useRef(null);
@@ -65,11 +66,17 @@ export default function App() {
 
   useEffect(() => {
     const onKey = e => {
-      if (e.key !== 'Escape') return;
-      if (phase === 'playing') {
+      if (e.key === 'Escape' && phase === 'playing') {
         e.preventDefault();
         bus.emit('pause:set', true);
         setPhase('paused');
+        return;
+      }
+      if ((e.key === 'i' || e.key === 'I') && phase === 'playing') {
+        e.preventDefault();
+        bus.emit('pause:set', true);
+        setPhase('inventory');
+        return;
       }
     };
     window.addEventListener('keydown', onKey);
@@ -163,6 +170,9 @@ export default function App() {
       )}
       {phase === 'paused' && (
         <PauseMenu onResume={resumeFromPause} onMenu={goMenu} />
+      )}
+      {phase === 'inventory' && (
+        <InventoryOverlay hud={hud} onClose={resumeFromPause} />
       )}
       {(phase === 'dead' || phase === 'victory') && (
         <EndScreen phase={phase} hud={hud} onRestart={start} onMenu={goMenu} />

@@ -313,6 +313,17 @@ export default class GameScene extends Phaser.Scene {
       buffs: { ...this.buffs },
       bosses,
       cooldowns,
+      stats: {
+        speed: p.speed,
+        dmgM: p.dmgM,
+        xpM: p.xpM,
+        magnet: p.magnet,
+        regen: p.regen,
+        lifesteal: p.ls,
+        killHeal: p.kh,
+        canDash: p.canDash,
+        dashReady: p.canDash && p.dashCD <= 0,
+      },
       over: this.over,
     });
   }
@@ -1205,11 +1216,18 @@ export default class GameScene extends Phaser.Scene {
         g.vy = (dy / dist) * g.speed;
         g.x += g.vx * dt;
         g.y += g.vy * dt;
-        if (Math.hypot(g.x - target.x, g.y - target.y) < g.size + 8) {
-          // teleport orb to player and apply XP boost
-          target.value = Math.ceil(target.value * xpBoost);
-          target.x = p.x;
-          target.y = p.y;
+        if (Math.hypot(g.x - target.x, g.y - target.y) < g.size + 14) {
+          // pickup directly: grant boosted XP and mark orb for removal
+          p.xp += Math.ceil(target.value * xpBoost);
+          playSfx('xp');
+          if (p.xp >= xpFor(p.level)) {
+            p.xp -= xpFor(p.level);
+            p.level++;
+            p.hp = Math.min(p.maxHp, p.hp + 15);
+            playSfx('levelup');
+            this.onLevelUp(p);
+          }
+          target.life = -1; // updateOrbs will filter this out
           target.tagged = null;
         }
       } else {
