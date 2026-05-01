@@ -20,6 +20,7 @@ export default function App() {
   const [levelUp, setLevelUp] = useState({ lv: 1, choices: [] });
   const [startWeapon, setStartWeapon] = useState('dagger');
   const [startMode, setStartMode] = useState('normal');
+  const [numPlayers, setNumPlayers] = useState(1);
   const [bossAnnounce, setBossAnnounce] = useState(null);
   const [uiScale, setUiScaleState] = useState(() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('uiScale') : null;
@@ -98,7 +99,7 @@ export default function App() {
   };
 
   const start = () => {
-    setOptions({ startWeapon, mode: startMode });
+    setOptions({ startWeapon, mode: startMode, numPlayers });
     if (!gameRef.current) {
       gameRef.current = createGame(containerRef.current);
     } else {
@@ -164,7 +165,7 @@ export default function App() {
       {bossAnnounce && phase === 'playing' && (
         <BossTitle key={bossAnnounce.key} name={bossAnnounce.name} onDone={() => setBossAnnounce(null)} />
       )}
-      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} />}
+      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} />}
       {phase === 'compendium' && <Compendium onClose={() => setPhase('menu')} />}
       {phase === 'levelup' && (
         <LevelUpScreen lv={levelUp.lv} choices={levelUp.choices} skills={hud.skills} onPick={pickSkill} />

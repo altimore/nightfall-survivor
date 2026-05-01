@@ -15,6 +15,7 @@ export default function HUD({ muted, onToggleMute }) {
   const danger = timeLeft < 30;
   const skillEntries = Object.entries(s.skills || {});
   const buffEntries = Object.entries(s.buffs || {}).filter(([, v]) => v > 0);
+  const otherPlayers = (s.players || []).slice(1);
 
   return (
     <div style={{
@@ -65,6 +66,44 @@ export default function HUD({ muted, onToggleMute }) {
           }}>{muted ? '🔇' : '🔊'}</button>
         </div>
       </div>
+      {otherPlayers.length > 0 && (
+        <div style={{
+          display: 'flex', gap: '0.6em', padding: '0.36em 0.9em',
+          background: 'rgba(5,0,20,.65)',
+          borderTop: '1px solid rgba(60,9,108,.25)',
+          flexWrap: 'wrap', alignItems: 'center',
+        }}>
+          {otherPlayers.map(pl => {
+            const tint = `#${(pl.tint ?? 0xffffff).toString(16).padStart(6, '0')}`;
+            return (
+              <div key={pl.id} style={{
+                display: 'flex', alignItems: 'center', gap: '0.5em',
+                padding: '0.18em 0.7em',
+                background: pl.dead ? 'rgba(40,0,0,.6)' : 'rgba(10,0,30,.6)',
+                border: `1px solid ${tint}55`,
+                borderRadius: 4,
+                opacity: pl.dead ? 0.55 : 1,
+              }}>
+                <span style={{ color: tint, fontSize: '0.82em', letterSpacing: 2 }}>P{pl.id + 1}</span>
+                <div style={{ width: '8em' }}>
+                  <div style={{ fontSize: '0.78em', color: '#ff4d6d', letterSpacing: 1 }}>❤ {pl.hp}/{pl.maxHp}</div>
+                  <div style={{ height: '0.4em', background: '#1a0010', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${Math.max(0, pl.hp / pl.maxHp * 100)}%`,
+                      background: 'linear-gradient(90deg,#8b0000,#ff2244)',
+                      borderRadius: 3,
+                    }}/>
+                  </div>
+                </div>
+                <span style={{ color: tint, fontSize: '0.78em', letterSpacing: 1 }}>{t('hud.level')}{pl.lv}</span>
+                <span style={{ color: '#b69ad8', fontSize: '0.78em' }}>☠{pl.kills}</span>
+                {pl.dead && <span style={{ color: '#ff4400', fontSize: '0.82em', letterSpacing: 2 }}>✝</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
       {buffEntries.length > 0 && (
         <div style={{
           display: 'flex', gap: '0.55em', padding: '0.36em 0.9em',

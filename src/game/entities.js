@@ -1,14 +1,29 @@
 import { ETYPES, ITEMS, STATUS_TEMPLATES } from './data.js';
 
 // ────────────────────────────────────────
-// Default keyboard controller (used by player 0 in solo)
+// Controller configurations.
+// In solo, player 1 grabs both WASD and arrows. In duo, player 1 keeps WASD
+// and player 2 takes the arrows (so each player has their own keys).
 // ────────────────────────────────────────
-export const DEFAULT_CONTROLLER = {
+export const CONTROLLER_SOLO = {
   keys: { left: ['A', 'Q', 'LEFT'], right: ['D', 'RIGHT'], up: ['W', 'Z', 'UP'], down: ['S', 'DOWN'], dash: ['SPACE'] },
   gamepadIndex: 0,
   joystick: true,
   color: 0xff4d6d,
 };
+export const CONTROLLER_P1 = {
+  keys: { left: ['A', 'Q'], right: ['D'], up: ['W', 'Z'], down: ['S'], dash: ['SPACE'] },
+  gamepadIndex: 0,
+  joystick: true,
+  color: 0xff4d6d,
+};
+export const CONTROLLER_P2 = {
+  keys: { left: ['LEFT'], right: ['RIGHT'], up: ['UP'], down: ['DOWN'], dash: ['ENTER', 'NUMPAD_ZERO', 'SHIFT'] },
+  gamepadIndex: 1,
+  joystick: false,
+  color: 0x88ddff,
+};
+export const DEFAULT_CONTROLLER = CONTROLLER_SOLO;
 
 export const PLAYER_TINTS = [0xff4d6d, 0x88ddff, 0x80ffdb, 0xffe066];
 

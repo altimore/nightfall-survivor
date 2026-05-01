@@ -8,7 +8,7 @@ import { playSfx } from '../game/audio.js';
 // Starter weapons : utility powers like 'gather' are excluded — they can't kill on their own.
 const WEAPONS = ['dagger', 'sword', 'whip', 'missile', 'floating', 'grenade', 'flamethrower', 'cloud', 'nova', 'lightning', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
 
-export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChange, uiScale, setUiScale, onOpenGuide }) {
+export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, uiScale, setUiScale, onOpenGuide }) {
   const t = useT();
   const lang = getLang();
   const pickWeapon = id => { if (id !== weapon) playSfx('uimove'); onWeaponChange(id); };
@@ -165,6 +165,38 @@ export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChan
             {t(`modes.${mode}.desc`)}
           </div>
         </div>
+
+        {onNumPlayersChange && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ color: '#c77dff', fontSize: '0.91em', letterSpacing: 4, marginBottom: 10 }}>{t('players.label')}</div>
+            <div style={{ display: 'flex', gap: '0.5em', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {[1, 2].map(n => {
+                const active = numPlayers === n;
+                const label = n === 1 ? t('players.solo') : t('players.duo');
+                return (
+                  <button
+                    key={n}
+                    onClick={() => { if (n !== numPlayers) playSfx('uimove'); onNumPlayersChange(n); }}
+                    style={{
+                      padding: '0.5em 1em',
+                      background: active ? 'rgba(199,125,255,0.2)' : 'transparent',
+                      border: `1px solid ${active ? '#c77dff' : '#6c3483'}`,
+                      color: active ? '#e0aaff' : '#b69ad8',
+                      fontFamily: "'Cinzel',serif", fontSize: '0.91em', letterSpacing: 2,
+                      cursor: 'pointer', borderRadius: 4,
+                      boxShadow: active ? '0 0 14px rgba(199,125,255,0.45)' : 'none',
+                    }}
+                  >{label}</button>
+                );
+              })}
+            </div>
+            {numPlayers === 2 && (
+              <div style={{ color: '#9d6dd0', fontSize: '0.78em', marginTop: 6, letterSpacing: 1 }}>
+                {t('players.duoHint')}
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: '0.7em', justifyContent: 'center', flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={startWithSfx} style={{

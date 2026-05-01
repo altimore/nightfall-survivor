@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GOAL_TIME } from '../config.js';
-import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest, Obstacle } from '../entities.js';
+import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest, Obstacle, CONTROLLER_SOLO, CONTROLLER_P1, CONTROLLER_P2 } from '../entities.js';
 import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES } from '../data.js';
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
@@ -131,15 +131,30 @@ export default class GameScene extends Phaser.Scene {
     this.decorations = this.generateDecor();
     this.scale.on('resize', () => { this.decorations = this.generateDecor(); });
 
-    this.player = new Player(this, this.W / 2, this.H / 2);
-    const startW = getOptions().startWeapon || 'dagger';
-    this.player.skills = { [startW]: 1 };
-    this.mode = getOptions().mode || 'normal';
-    if (this.mode === 'oneShot') {
-      this.player.maxHp = 1;
-      this.player.hp = 1;
-      this.player.dmgM = 100;
+    const opts = getOptions();
+    const startW = opts.startWeapon || 'dagger';
+    const startW2 = opts.startWeapon2 || startW;
+    const num = Math.max(1, Math.min(2, opts.numPlayers || 1));
+    this.mode = opts.mode || 'normal';
+
+    this.players = [];
+    if (num === 1) {
+      const p = new Player(this, this.W / 2, this.H / 2, 0, CONTROLLER_SOLO);
+      p.skills = { [startW]: 1 };
+      this.players.push(p);
+    } else {
+      const p1 = new Player(this, this.W / 2 - 60, this.H / 2, 0, CONTROLLER_P1);
+      p1.skills = { [startW]: 1 };
+      const p2 = new Player(this, this.W / 2 + 60, this.H / 2, 1, CONTROLLER_P2);
+      p2.skills = { [startW2]: 1 };
+      this.players.push(p1, p2);
     }
+    if (this.mode === 'oneShot') {
+      for (const p of this.players) {
+        p.maxHp = 1; p.hp = 1; p.dmgM = 100;
+      }
+    }
+    this.player = this.players[0];
     this.enemies = [];
     this.projectiles = [];
     this.eprojectiles = [];
@@ -150,30 +165,18 @@ export default class GameScene extends Phaser.Scene {
     this.elapsed = 0;
     this.kills = 0;
     this.spawnT = 1;
-    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, whip: 0, charm: 0, missile: 0, grenade: 0 };
     this.missiles = [];
     this.floating = [];
-    this.floatingT = 0;
     this.grenades = [];
     this.clouds = [];
-    this.cloudT = 0;
     this.nests = [];
     this.nestSpawnT = 25;
     this.obstacles = [];
-    this.orbitAngle = 0;
-    this.orbitHits = new Map();
     this.trail = [];
-    this.lastTrailX = this.W / 2;
-    this.lastTrailY = this.H / 2;
-    this.trailHits = new Map();
     this.traps = [];
-    this.trapT = 0;
     this.minions = [];
-    this.minionT = 0;
     this.gatherers = [];
-    this.gathererT = 0;
     this.turrets = [];
-    this.turretT = 0;
     this.waveIdx = 0;
     this.bossWarningSent = new Set();
     this.bossMusicOn = false;
@@ -183,8 +186,10 @@ export default class GameScene extends Phaser.Scene {
     this.hitstop = 0;
     this.hudT = 0;
 
-    this.keys = this.input.keyboard.addKeys('W,A,S,D,Z,Q,UP,DOWN,LEFT,RIGHT');
-    this.input.keyboard.addKey('SPACE').on('down', () => this.tryDash());
+    this.keys = this.input.keyboard.addKeys('W,A,S,D,Z,Q,UP,DOWN,LEFT,RIGHT,ENTER,SHIFT,NUMPAD_ZERO');
+    this.input.keyboard.addKey('SPACE').on('down', () => this.tryDashFor(this.players[0]));
+    this.input.keyboard.addKey('ENTER').on('down', () => { if (this.players[1]) this.tryDashFor(this.players[1]); });
+    this.input.keyboard.addKey('NUMPAD_ZERO').on('down', () => { if (this.players[1]) this.tryDashFor(this.players[1]); });
 
     this.joystick = { active: false, id: null, baseX: 0, baseY: 0, thumbX: 0, thumbY: 0, dx: 0, dy: 0 };
     this.input.addPointer(2);
@@ -228,7 +233,7 @@ export default class GameScene extends Phaser.Scene {
       j.thumbX = p.x; j.thumbY = p.y;
       j.dx = 0; j.dy = 0;
     } else if (p.id !== j.id) {
-      this.tryDash();
+      this.tryDashFor(this.players[0]);
     }
   }
   onPointerMove(p) {
@@ -304,45 +309,56 @@ export default class GameScene extends Phaser.Scene {
 
   emitHud() {
     const p = this.player;
+    const playersInfo = this.players.map(pl => ({
+      id: pl.id,
+      hp: Math.floor(pl.hp),
+      maxHp: pl.maxHp,
+      xp: pl.xp,
+      xpN: xpFor(pl.level),
+      lv: pl.level,
+      kills: pl.kills,
+      dead: pl.dead,
+      tint: pl.tint,
+    }));
     const bosses = [];
     for (const e of this.enemies) {
       if (e.type === 'boss') bosses.push({ name: e.name || 'BOSS', hp: Math.floor(e.hp), maxHp: e.maxHp });
     }
     const cooldowns = {};
     const r01 = (t, max) => Math.max(0, Math.min(1, 1 - t / max));
-    if (slv(p, 'dagger') > 0) cooldowns.dagger = r01(this.weaponT.dagger, slv(p, 'dagger') >= 3 ? 0.45 : 0.8);
+    if (slv(p, 'dagger') > 0) cooldowns.dagger = r01(p.weaponT.dagger, slv(p, 'dagger') >= 3 ? 0.45 : 0.8);
     if (slv(p, 'sword') > 0) {
       const lv = slv(p, 'sword');
-      cooldowns.sword = r01(this.weaponT.sword, lv >= 5 ? 0.5 : lv >= 2 ? 0.85 : 1.1);
+      cooldowns.sword = r01(p.weaponT.sword, lv >= 5 ? 0.5 : lv >= 2 ? 0.85 : 1.1);
     }
     if (slv(p, 'whip') > 0) {
       const lv = slv(p, 'whip');
-      cooldowns.whip = r01(this.weaponT.whip, lv >= 5 ? 0.6 : lv >= 3 ? 0.85 : 1.0);
+      cooldowns.whip = r01(p.weaponT.whip, lv >= 5 ? 0.6 : lv >= 3 ? 0.85 : 1.0);
     }
     if (slv(p, 'nova') > 0) {
       const lv = slv(p, 'nova');
-      cooldowns.nova = r01(this.weaponT.nova, lv >= 4 ? 1.2 : 2);
+      cooldowns.nova = r01(p.weaponT.nova, lv >= 4 ? 1.2 : 2);
     }
     if (slv(p, 'lightning') > 0) {
       const lv = slv(p, 'lightning');
-      cooldowns.lightning = r01(this.weaponT.lightning, lv >= 5 ? 0.4 : lv >= 3 ? 0.8 : 1.5);
+      cooldowns.lightning = r01(p.weaponT.lightning, lv >= 5 ? 0.4 : lv >= 3 ? 0.8 : 1.5);
     }
     if (slv(p, 'charm') > 0) {
       const lv = slv(p, 'charm');
-      cooldowns.charm = r01(this.weaponT.charm, lv >= 5 ? 5 : 8);
+      cooldowns.charm = r01(p.weaponT.charm, lv >= 5 ? 5 : 8);
     }
     if (slv(p, 'missile') > 0) {
       const lv = slv(p, 'missile');
-      cooldowns.missile = r01(this.weaponT.missile, lv >= 5 ? 0.8 : 1.2);
+      cooldowns.missile = r01(p.weaponT.missile, lv >= 5 ? 0.8 : 1.2);
     }
-    if (slv(p, 'grenade') > 0) cooldowns.grenade = r01(this.weaponT.grenade, 2);
+    if (slv(p, 'grenade') > 0) cooldowns.grenade = r01(p.weaponT.grenade, 2);
     if (slv(p, 'traps') > 0) {
       const lv = slv(p, 'traps');
-      cooldowns.traps = r01(this.trapT, lv >= 5 ? 1.5 : lv >= 4 ? 2 : 3);
+      cooldowns.traps = r01(p.trapT, lv >= 5 ? 1.5 : lv >= 4 ? 2 : 3);
     }
     if (slv(p, 'summon') > 0) {
       const lv = slv(p, 'summon');
-      cooldowns.summon = r01(this.minionT, lv >= 5 ? 4 : 6);
+      cooldowns.summon = r01(p.minionT, lv >= 5 ? 4 : 6);
     }
     bus.emit('hud:update', {
       hp: Math.floor(p.hp),
@@ -357,6 +373,7 @@ export default class GameScene extends Phaser.Scene {
       buffs: { ...this.buffs },
       bosses,
       cooldowns,
+      players: playersInfo,
       stats: {
         speed: p.speed,
         dmgM: p.dmgM,
@@ -401,50 +418,12 @@ export default class GameScene extends Phaser.Scene {
     else if (this.buffs.elementPoison > 0) this.elementOverride = 'poison';
     else this.elementOverride = null;
 
-    // ── Movement
-    let mx = this.joystick.dx || 0;
-    let my = this.joystick.dy || 0;
-    const k = this.keys;
-    if (k.LEFT.isDown || k.A.isDown || k.Q.isDown) mx -= 1;
-    if (k.RIGHT.isDown || k.D.isDown) mx += 1;
-    if (k.UP.isDown || k.W.isDown || k.Z.isDown) my -= 1;
-    if (k.DOWN.isDown || k.S.isDown) my += 1;
-    // Gamepad: left stick movement + A/cross for dash (edge-detected).
+    // ── Movement (per player, with their own controller)
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    if (!this.gpPrev) this.gpPrev = {};
-    for (const pad of pads) {
-      if (!pad) continue;
-      const id = pad.index;
-      const ax = pad.axes[0] || 0;
-      const ay = pad.axes[1] || 0;
-      if (Math.abs(ax) > 0.2) mx += ax;
-      if (Math.abs(ay) > 0.2) my += ay;
-      // dpad fallback
-      if (pad.buttons[14]?.pressed) mx -= 1;
-      if (pad.buttons[15]?.pressed) mx += 1;
-      if (pad.buttons[12]?.pressed) my -= 1;
-      if (pad.buttons[13]?.pressed) my += 1;
-      const a = pad.buttons[0]?.pressed;
-      const prev = this.gpPrev[id] || {};
-      if (a && !prev.a) this.tryDash();
-      this.gpPrev[id] = { a };
+    for (const pl of this.players) {
+      if (pl.dead) continue;
+      this.updatePlayerMovement(dt, pl, speedBoost, regenBuff, pads);
     }
-    const ml = Math.hypot(mx, my);
-    if (ml > 1) { mx /= ml; my /= ml; }
-    if (p.dashDur > 0) {
-      p.dashDur -= dt;
-      p.x += p.dashDir.x * 520 * dt;
-      p.y += p.dashDir.y * 520 * dt;
-    } else {
-      p.x += mx * p.speed * speedBoost * dt;
-      p.y += my * p.speed * speedBoost * dt;
-    }
-    if (p.dashCD > 0) p.dashCD -= dt;
-    p.x = Math.max(15, Math.min(this.W - 15, p.x));
-    p.y = Math.max(15, Math.min(this.H - 15, p.y));
-    p.iframes = Math.max(0, p.iframes - dt);
-    const totalRegen = (p.regen || 0) + regenBuff;
-    if (totalRegen > 0) p.hp = Math.min(p.maxHp, p.hp + totalRegen * dt);
 
     // ── Wave schedule (skipped in boss-rush mode — handled separately below)
     if (this.mode !== 'bossRush') {
@@ -527,16 +506,27 @@ export default class GameScene extends Phaser.Scene {
       return true;
     });
 
-    // ── Enemy AI + collision (vs. player, minions, charmed allies)
+    // ── Enemy AI + collision (vs. closest alive player, minions, charmed allies)
     for (const e of this.enemies) {
-      this.updateEnemyAi(dt, e, p, freezeMult);
+      // Enemy AI targets the closest alive player
+      let aiTarget = p;
+      let bestPd = Infinity;
+      for (const pl of this.players) {
+        if (pl.dead) continue;
+        const d = Math.hypot(pl.x - e.x, pl.y - e.y);
+        if (d < bestPd) { bestPd = d; aiTarget = pl; }
+      }
+      this.updateEnemyAi(dt, e, aiTarget, freezeMult);
       if (e.charmed) continue;
-      // player hit
-      if (!shielded && p.iframes <= 0 && Math.hypot(e.x - p.x, e.y - p.y) < e.size + 14) {
-        p.hp -= e.dmg;
-        p.iframes = 0.9;
-        playSfx('hit');
-        this.shake(0.007, 130);
+      // player hit (any alive player can be hit)
+      for (const pl of this.players) {
+        if (pl.dead) continue;
+        if (!shielded && pl.iframes <= 0 && Math.hypot(e.x - pl.x, e.y - pl.y) < e.size + 14) {
+          pl.hp -= e.dmg;
+          pl.iframes = 0.9;
+          playSfx('hit');
+          this.shake(0.007, 130);
+        }
       }
       // melee against minions & charmed (cooldown-gated to avoid 1-frame chunks)
       e.atkCD = Math.max(0, (e.atkCD || 0) - dt);
@@ -563,18 +553,22 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
-    // ── Player weapons
-    this.firePlayerWeapons(dt, p, dmgBoost);
-    this.updateTrail(dt, p, dmgBoost);
-    this.updateTraps(dt, p, dmgBoost);
-    this.updateMinions(dt, p);
-    this.updateGatherers(dt, p);
-    this.updateTurrets(dt, p, dmgBoost);
-    this.updateMissiles(dt, p);
-    this.updateFloating(dt, p, dmgBoost);
-    this.updateGrenades(dt, p);
-    this.updateClouds(dt, p, dmgBoost);
-    this.updateNests(dt, p);
+    // ── Player weapons (per player)
+    for (const pl of this.players) {
+      if (pl.dead) continue;
+      this.firePlayerWeapons(dt, pl, dmgBoost);
+      this.updateTrail(dt, pl, dmgBoost);
+      this.updateTraps(dt, pl, dmgBoost);
+      this.updateMinions(dt, pl);
+      this.updateGatherers(dt, pl);
+      this.updateTurrets(dt, pl, dmgBoost);
+      this.updateMissiles(dt, pl);
+      this.updateFloating(dt, pl, dmgBoost);
+      this.updateGrenades(dt, pl);
+      this.updateClouds(dt, pl, dmgBoost);
+    }
+    // Nests: shared (uses any alive player for spawn-distance check)
+    this.updateNests(dt, this.players.find(pl => !pl.dead) || this.players[0]);
 
     // ── Player projectiles
     for (const proj of this.projectiles) {
@@ -626,11 +620,18 @@ export default class GameScene extends Phaser.Scene {
         ep.alive = false;
         continue;
       }
-      if (!shielded && p.iframes <= 0 && Math.hypot(ep.x - p.x, ep.y - p.y) < 15) {
-        p.hp -= ep.dmg;
-        p.iframes = 0.7;
-        playSfx('hit');
-        ep.alive = false;
+      // any alive player can be hit
+      if (!shielded) {
+        for (const pl of this.players) {
+          if (pl.dead || pl.iframes > 0) continue;
+          if (Math.hypot(ep.x - pl.x, ep.y - pl.y) < 15) {
+            pl.hp -= ep.dmg;
+            pl.iframes = 0.7;
+            playSfx('hit');
+            ep.alive = false;
+            break;
+          }
+        }
       }
       // obstacles block enemy projectiles too
       if (ep.alive) {
@@ -645,7 +646,11 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // ── XP orbs
-    this.updateOrbs(dt, p);
+    // Orbs: any alive player can pull / pickup
+    for (const pl of this.players) {
+      if (pl.dead) continue;
+      this.updateOrbs(dt, pl);
+    }
 
     // ── Cleanup
     this.projectiles = this.projectiles.filter(pr => {
@@ -684,9 +689,14 @@ export default class GameScene extends Phaser.Scene {
       return true;
     });
 
-    // ── End conditions
-    if (p.hp <= 0) {
-      p.hp = 0; this.over = true;
+    // ── End conditions: each player may die individually; the run ends only
+    // when every player is down. Victory still triggers when the timer expires.
+    for (const pl of this.players) {
+      if (!pl.dead && pl.hp <= 0) { pl.hp = 0; pl.dead = true; }
+    }
+    const allDead = this.players.every(pl => pl.dead);
+    if (allDead) {
+      this.over = true;
       stopMusic(); playSfx('gameover');
       bus.emit('phase', 'dead');
       this.emitHud();
@@ -704,7 +714,7 @@ export default class GameScene extends Phaser.Scene {
     for (const n of this.nests) n.redraw();
     for (const o of this.obstacles) o.redraw();
     for (const tu of this.turrets) tu.redraw();
-    p.redraw();
+    for (const pl of this.players) if (!pl.dead) pl.redraw();
     for (const it of this.items) it.redraw();
     for (const e of this.enemies) e.redraw();
     for (const m of this.minions) m.redraw();
@@ -765,17 +775,62 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  tryDash() {
-    if (this.over || this.paused) return;
-    const p = this.player;
-    if (!p.canDash || p.dashCD > 0 || p.dashDur > 0) return;
-    let dx = this.joystick.dx || 0;
-    let dy = this.joystick.dy || 0;
+  updatePlayerMovement(dt, p, speedBoost, regenBuff, pads) {
+    let mx = 0, my = 0;
+    if (p.joystick && p.joystick.active) {
+      mx += p.joystick.dx || 0;
+      my += p.joystick.dy || 0;
+    }
     const k = this.keys;
-    if (k.LEFT.isDown || k.A.isDown || k.Q.isDown) dx -= 1;
-    if (k.RIGHT.isDown || k.D.isDown) dx += 1;
-    if (k.UP.isDown || k.W.isDown || k.Z.isDown) dy -= 1;
-    if (k.DOWN.isDown || k.S.isDown) dy += 1;
+    for (const key of p.controller.keys.left) if (k[key]?.isDown) mx -= 1;
+    for (const key of p.controller.keys.right) if (k[key]?.isDown) mx += 1;
+    for (const key of p.controller.keys.up) if (k[key]?.isDown) my -= 1;
+    for (const key of p.controller.keys.down) if (k[key]?.isDown) my += 1;
+    // Gamepad: only the pad whose index matches this player's controller
+    const pad = pads && pads[p.controller.gamepadIndex];
+    if (pad) {
+      const ax = pad.axes[0] || 0;
+      const ay = pad.axes[1] || 0;
+      if (Math.abs(ax) > 0.2) mx += ax;
+      if (Math.abs(ay) > 0.2) my += ay;
+      if (pad.buttons[14]?.pressed) mx -= 1;
+      if (pad.buttons[15]?.pressed) mx += 1;
+      if (pad.buttons[12]?.pressed) my -= 1;
+      if (pad.buttons[13]?.pressed) my += 1;
+      const a = pad.buttons[0]?.pressed;
+      p.gpPrev = p.gpPrev || {};
+      const prev = p.gpPrev[pad.index] || {};
+      if (a && !prev.a) this.tryDashFor(p);
+      p.gpPrev[pad.index] = { a };
+    }
+    const ml = Math.hypot(mx, my);
+    if (ml > 1) { mx /= ml; my /= ml; }
+    if (p.dashDur > 0) {
+      p.dashDur -= dt;
+      p.x += p.dashDir.x * 520 * dt;
+      p.y += p.dashDir.y * 520 * dt;
+    } else {
+      p.x += mx * p.speed * speedBoost * dt;
+      p.y += my * p.speed * speedBoost * dt;
+    }
+    if (p.dashCD > 0) p.dashCD -= dt;
+    p.x = Math.max(15, Math.min(this.W - 15, p.x));
+    p.y = Math.max(15, Math.min(this.H - 15, p.y));
+    p.iframes = Math.max(0, p.iframes - dt);
+    const totalRegen = (p.regen || 0) + regenBuff;
+    if (totalRegen > 0) p.hp = Math.min(p.maxHp, p.hp + totalRegen * dt);
+  }
+
+  tryDashFor(p) {
+    if (this.over || this.paused || !p || p.dead) return;
+    if (!p.canDash || p.dashCD > 0 || p.dashDur > 0) return;
+    let dx = 0, dy = 0;
+    if (p.joystick && p.joystick.active) { dx += p.joystick.dx; dy += p.joystick.dy; }
+    const k = this.keys;
+    for (const key of p.controller.keys.left) if (k[key]?.isDown) dx -= 1;
+    for (const key of p.controller.keys.right) if (k[key]?.isDown) dx += 1;
+    for (const key of p.controller.keys.up) if (k[key]?.isDown) dy -= 1;
+    for (const key of p.controller.keys.down) if (k[key]?.isDown) dy += 1;
     const l = Math.hypot(dx, dy);
     if (l < 0.05) return;
     p.dashDir = { x: dx / l, y: dy / l };
@@ -997,9 +1052,9 @@ export default class GameScene extends Phaser.Scene {
   firePlayerWeapons(dt, p, dmgBoost) {
     const dlv = slv(p, 'dagger');
     if (dlv > 0) {
-      this.weaponT.dagger -= dt;
-      if (this.weaponT.dagger <= 0 && this.enemies.length > 0) {
-        this.weaponT.dagger = dlv >= 3 ? 0.45 : 0.8;
+      p.weaponT.dagger -= dt;
+      if (p.weaponT.dagger <= 0 && this.enemies.length > 0) {
+        p.weaponT.dagger = dlv >= 3 ? 0.45 : 0.8;
         let near = null, nd = Infinity;
         for (const e of this.enemies) {
           const d = Math.hypot(e.x - p.x, e.y - p.y);
@@ -1024,23 +1079,23 @@ export default class GameScene extends Phaser.Scene {
       const speed = olv >= 5 ? 3.0 : 2.0;
       const dmg = (10 + olv * 4) * p.dmgM * dmgBoost * (olv >= 5 ? 1.5 : olv >= 3 ? 1.2 : 1);
       const orbR = 12;
-      this.orbitAngle += speed * dt;
+      p.orbitAngle += speed * dt;
       // tick down per-enemy hit cooldowns
-      for (const [k, v] of this.orbitHits) {
+      for (const [k, v] of p.orbitHits) {
         const nv = v - dt;
-        if (nv <= 0) this.orbitHits.delete(k);
-        else this.orbitHits.set(k, nv);
+        if (nv <= 0) p.orbitHits.delete(k);
+        else p.orbitHits.set(k, nv);
       }
       for (let i = 0; i < olv; i++) {
-        const a = this.orbitAngle + (i / olv) * Math.PI * 2;
+        const a = p.orbitAngle + (i / olv) * Math.PI * 2;
         const ox = p.x + Math.cos(a) * radius;
         const oy = p.y + Math.sin(a) * radius;
         for (const e of this.enemies) {
-          if (this.orbitHits.has(e)) continue;
+          if (p.orbitHits.has(e)) continue;
           if (Math.hypot(e.x - ox, e.y - oy) < e.size + orbR) {
             const dealt = e.takeDamage(dmg, 'dark', this);
             if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
-            this.orbitHits.set(e, 0.5);
+            p.orbitHits.set(e, 0.5);
           }
         }
       }
@@ -1048,9 +1103,9 @@ export default class GameScene extends Phaser.Scene {
 
     const swlv = slv(p, 'sword');
     if (swlv > 0) {
-      this.weaponT.sword -= dt;
-      if (this.weaponT.sword <= 0) {
-        this.weaponT.sword = swlv >= 5 ? 0.5 : swlv >= 2 ? 0.85 : 1.1;
+      p.weaponT.sword -= dt;
+      if (p.weaponT.sword <= 0) {
+        p.weaponT.sword = swlv >= 5 ? 0.5 : swlv >= 2 ? 0.85 : 1.1;
         const radius = 70 + swlv * 8;
         const dmg = (22 + swlv * 7) * p.dmgM * dmgBoost * (swlv >= 4 ? 1.5 : 1);
         const arcDeg = swlv >= 4 ? 360 : swlv >= 3 ? 180 : swlv >= 2 ? 120 : 90;
@@ -1078,9 +1133,9 @@ export default class GameScene extends Phaser.Scene {
 
     const cmlv = slv(p, 'charm');
     if (cmlv > 0) {
-      this.weaponT.charm -= dt;
-      if (this.weaponT.charm <= 0) {
-        this.weaponT.charm = cmlv >= 5 ? 5 : 8;
+      p.weaponT.charm -= dt;
+      if (p.weaponT.charm <= 0) {
+        p.weaponT.charm = cmlv >= 5 ? 5 : 8;
         const count = cmlv >= 5 ? 3 : cmlv >= 3 ? 2 : 1;
         const duration = cmlv >= 4 ? 10 : cmlv >= 2 ? 8 : 5;
         const dmgMul = cmlv >= 4 ? 1.5 : 1;
@@ -1102,16 +1157,16 @@ export default class GameScene extends Phaser.Scene {
     if (fllv > 0) {
       const burstDur = fllv >= 5 ? 3.0 : 2.5;
       const cd = fllv >= 5 ? 3.5 : fllv >= 3 ? 4 : 5;
-      this.flameCD = (this.flameCD || 0) - dt;
-      if (this.flameActive) {
-        this.flameDur -= dt;
-        if (this.flameDur <= 0) {
-          this.flameActive = false;
-          this.flameCD = cd;
+      p.flameCD = (p.flameCD || 0) - dt;
+      if (p.flameActive) {
+        p.flameDur -= dt;
+        if (p.flameDur <= 0) {
+          p.flameActive = false;
+          p.flameCD = cd;
         } else {
-          this.weaponT.flamethrower = (this.weaponT.flamethrower || 0) - dt;
-          if (this.weaponT.flamethrower <= 0) {
-            this.weaponT.flamethrower = 0.1;
+          p.weaponT.flamethrower = (p.weaponT.flamethrower || 0) - dt;
+          if (p.weaponT.flamethrower <= 0) {
+            p.weaponT.flamethrower = 0.1;
             const range = fllv >= 3 ? 180 : 150;
             const arcDeg = fllv >= 4 ? 100 : fllv >= 2 ? 80 : 60;
             const arc = arcDeg * Math.PI / 180;
@@ -1122,8 +1177,8 @@ export default class GameScene extends Phaser.Scene {
               const d = Math.hypot(e.x - p.x, e.y - p.y);
               if (d < nd) { nd = d; near = e; }
             }
-            const baseAngle = near ? Math.atan2(near.y - p.y, near.x - p.x) : (this._lastFlameAngle ?? 0);
-            this._lastFlameAngle = baseAngle;
+            const baseAngle = near ? Math.atan2(near.y - p.y, near.x - p.x) : (p._lastFlameAngle ?? 0);
+            p._lastFlameAngle = baseAngle;
             const angles = fllv >= 5 ? [baseAngle, baseAngle + Math.PI] : [baseAngle];
             for (const a of angles) {
               this.applyFlamethrower(p, a, arc, range, dmg);
@@ -1131,9 +1186,9 @@ export default class GameScene extends Phaser.Scene {
             }
           }
         }
-      } else if (this.flameCD <= 0 && this.enemies.length > 0) {
-        this.flameActive = true;
-        this.flameDur = burstDur;
+      } else if (p.flameCD <= 0 && this.enemies.length > 0) {
+        p.flameActive = true;
+        p.flameDur = burstDur;
         playSfx('nova');
       }
     }
@@ -1141,9 +1196,9 @@ export default class GameScene extends Phaser.Scene {
     const cllv = slv(p, 'cloud');
     if (cllv > 0) {
       const max = cllv >= 5 ? 4 : cllv >= 4 ? 3 : cllv >= 2 ? 2 : 1;
-      this.cloudT -= dt;
-      if (this.cloudT <= 0 && this.clouds.length < max) {
-        this.cloudT = 4;
+      p.cloudT -= dt;
+      if (p.cloudT <= 0 && this.clouds.length < max) {
+        p.cloudT = 4;
         const c = new StormCloud(this, 0);
         c.x = p.x + (Math.random() - 0.5) * 200;
         c.y = p.y - 100 + (Math.random() - 0.5) * 80;
@@ -1153,9 +1208,9 @@ export default class GameScene extends Phaser.Scene {
 
     const grlv = slv(p, 'grenade');
     if (grlv > 0) {
-      this.weaponT.grenade -= dt;
-      if (this.weaponT.grenade <= 0) {
-        this.weaponT.grenade = 2;
+      p.weaponT.grenade -= dt;
+      if (p.weaponT.grenade <= 0) {
+        p.weaponT.grenade = 2;
         const count = grlv >= 4 ? 3 : grlv >= 3 ? 2 : 1;
         const aoe = (70 + grlv * 5) * (grlv >= 2 ? 1.3 : 1);
         const dmg = (35 + grlv * 8) * p.dmgM * dmgBoost * (grlv >= 4 ? 1.3 : 1);
@@ -1175,9 +1230,9 @@ export default class GameScene extends Phaser.Scene {
 
     const milv = slv(p, 'missile');
     if (milv > 0) {
-      this.weaponT.missile -= dt;
-      if (this.weaponT.missile <= 0 && this.enemies.length > 0) {
-        this.weaponT.missile = milv >= 5 ? 0.8 : 1.2;
+      p.weaponT.missile -= dt;
+      if (p.weaponT.missile <= 0 && this.enemies.length > 0) {
+        p.weaponT.missile = milv >= 5 ? 0.8 : 1.2;
         const count = milv;
         const dmg = (25 + milv * 5) * p.dmgM * dmgBoost * (milv >= 4 ? 1.4 : 1);
         const aoe = milv >= 5 ? 80 : milv >= 3 ? 50 : 30;
@@ -1199,9 +1254,9 @@ export default class GameScene extends Phaser.Scene {
 
     const wlv = slv(p, 'whip');
     if (wlv > 0) {
-      this.weaponT.whip -= dt;
-      if (this.weaponT.whip <= 0) {
-        this.weaponT.whip = wlv >= 5 ? 0.6 : wlv >= 3 ? 0.85 : 1.0;
+      p.weaponT.whip -= dt;
+      if (p.weaponT.whip <= 0) {
+        p.weaponT.whip = wlv >= 5 ? 0.6 : wlv >= 3 ? 0.85 : 1.0;
         const length = wlv >= 4 ? 200 : wlv >= 2 ? 165 : 130;
         const width = 38;
         const dmg = (18 + wlv * 5) * p.dmgM * dmgBoost * (wlv >= 4 ? 1.3 : 1);
@@ -1224,9 +1279,9 @@ export default class GameScene extends Phaser.Scene {
 
     const nlv = slv(p, 'nova');
     if (nlv > 0) {
-      this.weaponT.nova -= dt;
-      if (this.weaponT.nova <= 0) {
-        this.weaponT.nova = nlv >= 4 ? 1.2 : 2;
+      p.weaponT.nova -= dt;
+      if (p.weaponT.nova <= 0) {
+        p.weaponT.nova = nlv >= 4 ? 1.2 : 2;
         const r = (80 + nlv * 25) * (nlv >= 5 ? 1.5 : 1);
         const dmg = (18 + nlv * 10) * p.dmgM * (nlv >= 3 ? 1.5 : 1) * dmgBoost;
         for (const e of this.enemies) {
@@ -1248,9 +1303,9 @@ export default class GameScene extends Phaser.Scene {
 
     const llv = slv(p, 'lightning');
     if (llv > 0) {
-      this.weaponT.lightning -= dt;
-      if (this.weaponT.lightning <= 0 && this.enemies.length > 0) {
-        this.weaponT.lightning = llv >= 5 ? 0.4 : llv >= 3 ? 0.8 : 1.5;
+      p.weaponT.lightning -= dt;
+      if (p.weaponT.lightning <= 0 && this.enemies.length > 0) {
+        p.weaponT.lightning = llv >= 5 ? 0.4 : llv >= 3 ? 0.8 : 1.5;
         const chains = llv >= 4 ? 4 : llv >= 2 ? 2 : 1;
         const dmg = (20 + llv * 8) * p.dmgM * dmgBoost;
         let prev = { x: p.x, y: p.y };
@@ -1279,12 +1334,12 @@ export default class GameScene extends Phaser.Scene {
       const dropStep = tlv >= 2 ? 22 : 32;
       const radius = tlv >= 5 ? 40 : tlv >= 3 ? 28 : 22;
       const maxLife = tlv >= 5 ? 4 : tlv >= 3 ? 3 : 2.5;
-      const dx = p.x - this.lastTrailX;
-      const dy = p.y - this.lastTrailY;
+      const dx = p.x - p.lastTrailX;
+      const dy = p.y - p.lastTrailY;
       if (Math.hypot(dx, dy) >= dropStep) {
         this.trail.push(new TrailTile(this, p.x - dx * 0.3, p.y - dy * 0.3, radius, maxLife));
-        this.lastTrailX = p.x;
-        this.lastTrailY = p.y;
+        p.lastTrailX = p.x;
+        p.lastTrailY = p.y;
       }
     }
     // tick down tiles
@@ -1295,18 +1350,18 @@ export default class GameScene extends Phaser.Scene {
     });
     if (tlv > 0 && this.trail.length > 0) {
       const dmg = (5 + tlv * 2.5) * p.dmgM * dmgBoost * (tlv >= 4 ? 1.5 : 1) * (tlv >= 5 ? 1.5 : 1);
-      for (const [k, v] of this.trailHits) {
+      for (const [k, v] of p.trailHits) {
         const nv = v - dt;
-        if (nv <= 0) this.trailHits.delete(k);
-        else this.trailHits.set(k, nv);
+        if (nv <= 0) p.trailHits.delete(k);
+        else p.trailHits.set(k, nv);
       }
       for (const e of this.enemies) {
-        if (this.trailHits.has(e)) continue;
+        if (p.trailHits.has(e)) continue;
         for (const t of this.trail) {
           if (Math.hypot(e.x - t.x, e.y - t.y) < t.radius + e.size) {
             const dealt = e.takeDamage(dmg, 'poison', this);
             if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
-            this.trailHits.set(e, 0.4);
+            p.trailHits.set(e, 0.4);
             break;
           }
         }
@@ -1321,9 +1376,9 @@ export default class GameScene extends Phaser.Scene {
       const radius = (50 + lvl * 8) * (lvl >= 3 ? 1.5 : 1);
       const dmg = (25 + lvl * 8) * p.dmgM * dmgBoost * (lvl >= 4 ? 1.3 : 1);
       const count = lvl >= 2 ? 2 : 1;
-      this.trapT -= dt;
-      if (this.trapT <= 0) {
-        this.trapT = interval;
+      p.trapT -= dt;
+      if (p.trapT <= 0) {
+        p.trapT = interval;
         for (let i = 0; i < count; i++) {
           const a = Math.random() * Math.PI * 2;
           const dist = i === 0 ? 0 : 25 + Math.random() * 30;
@@ -1364,9 +1419,9 @@ export default class GameScene extends Phaser.Scene {
       const interval = lvl >= 5 ? 4 : 6;
       const hp = Math.round((30 + lvl * 8) * (lvl >= 3 ? 1.5 : 1));
       const dmg = (8 + lvl * 3) * (lvl >= 3 ? 1.3 : 1);
-      this.minionT -= dt;
-      if (this.minionT <= 0 && this.minions.length < maxMinions) {
-        this.minionT = interval;
+      p.minionT -= dt;
+      if (p.minionT <= 0 && this.minions.length < maxMinions) {
+        p.minionT = interval;
         const a = Math.random() * Math.PI * 2;
         this.minions.push(new Minion(this, p.x + Math.cos(a) * 35, p.y + Math.sin(a) * 35, hp, dmg, 145));
         playSfx('itempickup');
@@ -1433,9 +1488,9 @@ export default class GameScene extends Phaser.Scene {
     if (lvl > 0) {
       const max = lvl >= 5 ? 3 : lvl >= 3 ? 2 : 1;
       const speed = lvl >= 5 ? 280 : lvl >= 2 ? 180 : 140;
-      this.gathererT -= dt;
-      if (this.gathererT <= 0 && this.gatherers.length < max) {
-        this.gathererT = 8;
+      p.gathererT -= dt;
+      if (p.gathererT <= 0 && this.gatherers.length < max) {
+        p.gathererT = 8;
         const m = new Minion(this, p.x, p.y, 999, 0, speed, 'gatherer');
         m.size = 9;
         this.gatherers.push(m);
@@ -1493,9 +1548,9 @@ export default class GameScene extends Phaser.Scene {
     if (lvl > 0) {
       const max = lvl >= 5 ? 4 : lvl >= 4 ? 3 : lvl >= 2 ? 2 : 1;
       const interval = lvl >= 5 ? 3 : 5;
-      this.turretT -= dt;
-      if (this.turretT <= 0 && this.turrets.length < max) {
-        this.turretT = interval;
+      p.turretT -= dt;
+      if (p.turretT <= 0 && this.turrets.length < max) {
+        p.turretT = interval;
         const hp = (40 + lvl * 10) * (lvl >= 4 ? 1.5 : 1);
         const dmg = (6 + lvl * 2) * p.dmgM;
         const range = (140 + lvl * 15) * (lvl >= 3 ? 1.3 : 1);
@@ -1608,9 +1663,9 @@ export default class GameScene extends Phaser.Scene {
       const max = lvl >= 5 ? 6 : lvl >= 4 ? 5 : lvl >= 3 ? 4 : lvl >= 2 ? 3 : 2;
       const interval = lvl >= 4 ? 2 : 3;
       const idle = this.floating.filter(b => b.state === 'idle').length;
-      this.floatingT -= dt;
-      if (this.floatingT <= 0 && idle < max) {
-        this.floatingT = interval;
+      p.floatingT -= dt;
+      if (p.floatingT <= 0 && idle < max) {
+        p.floatingT = interval;
         const angle = (idle / Math.max(1, max)) * Math.PI * 2 + Math.random() * 0.4;
         this.floating.push(new FloatingBlade(this, 0, angle));
       }
@@ -1789,16 +1844,17 @@ export default class GameScene extends Phaser.Scene {
   }
 
   onLevelUp(p) {
+    this.pendingLevelupPlayer = p;
     this.paused = true;
     this.shake(0.006, 200);
     stopMusic();
     const choices = getChoices(p);
-    bus.emit('levelup', { lv: p.level, choices });
+    bus.emit('levelup', { lv: p.level, choices, playerId: p.id });
     this.emitHud();
   }
 
   onSkillPick(id) {
-    const p = this.player;
+    const p = this.pendingLevelupPlayer || this.player;
     p.skills[id] = (p.skills[id] || 0) + 1;
     if (id === 'heart') {
       const lv = p.skills.heart;
@@ -1806,8 +1862,9 @@ export default class GameScene extends Phaser.Scene {
       if (lv === 3) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.15);
     }
     refreshStats(p);
+    this.pendingLevelupPlayer = null;
     this.paused = false;
-    if (!this.over) startMusic();
+    if (!this.over) startMusic(this.bossMusicOn ? 'boss' : 'normal');
     this.emitHud();
   }
 
@@ -2288,7 +2345,7 @@ export default class GameScene extends Phaser.Scene {
     if (olv <= 0) return;
     const radius = olv >= 4 ? 90 : 70;
     for (let i = 0; i < olv; i++) {
-      const a = this.orbitAngle + (i / olv) * Math.PI * 2;
+      const a = p.orbitAngle + (i / olv) * Math.PI * 2;
       const x = p.x + Math.cos(a) * radius;
       const y = p.y + Math.sin(a) * radius;
       // halo

@@ -69,6 +69,12 @@ const dicts = {
       bossRush: { name: 'Boss Rush', desc: 'Que des boss · toutes les 15s' },
       oneShot: { name: 'Mort Instantanée', desc: '1 PV · dégâts ×100' },
     },
+    players: {
+      label: 'JOUEURS',
+      solo: 'Solo',
+      duo: 'Duo (2 joueurs)',
+      duoHint: 'P1 : WASD + Espace · P2 : Flèches + Entrée',
+    },
     inventory: {
       title: 'INVENTAIRE',
       stats: 'STATS',
@@ -170,6 +176,12 @@ const dicts = {
       horde: { name: 'Horde', desc: '×2 spawn · enemies 0.6× HP' },
       bossRush: { name: 'Boss Rush', desc: 'Bosses only · every 15s' },
       oneShot: { name: 'Glass Cannon', desc: '1 HP · damage ×100' },
+    },
+    players: {
+      label: 'PLAYERS',
+      solo: 'Solo',
+      duo: 'Duo (2 players)',
+      duoHint: 'P1: WASD + Space · P2: Arrows + Enter',
     },
     inventory: {
       title: 'INVENTORY',
