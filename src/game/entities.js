@@ -224,12 +224,17 @@ export class Enemy {
       }
     }
 
-    // HP bar (mid+ enemies)
-    if (this.size > 12) {
-      g.fillStyle(0x330000, 1);
-      g.fillRect(-22, -this.size - 14, 44, 4);
+    // HP bar — visible whenever the enemy has taken damage. Bigger enemies get
+    // a wider bar; small ones get a slim one above their head.
+    if (this.hp < this.maxHp || this.type === 'boss') {
+      const big = this.size > 12 || this.type === 'boss';
+      const w = big ? 44 : 22;
+      const h = big ? 4 : 3;
+      const yOff = -this.size - (big ? 14 : 8);
+      g.fillStyle(0x220006, 0.85);
+      g.fillRect(-w / 2, yOff, w, h);
       g.fillStyle(this.type === 'boss' ? 0xff4400 : 0xff0000, 1);
-      g.fillRect(-22, -this.size - 14, 44 * hpRatio, 4);
+      g.fillRect(-w / 2, yOff, w * Math.max(0, hpRatio), h);
     }
   }
   destroy() { this.gfx.destroy(); }
@@ -584,11 +589,12 @@ export class TrailTile {
 // Spectral minion — friendly summoned wisp that hunts the closest enemy.
 // ────────────────────────────────────────
 export class Minion {
-  constructor(scene, x, y, hp, dmg, speed) {
+  constructor(scene, x, y, hp, dmg, speed, kind = 'hunter') {
     this.gfx = scene.add.graphics().setDepth(11);
     this.x = x; this.y = y;
     this.maxHp = hp; this.hp = hp;
     this.dmg = dmg; this.speed = speed;
+    this.kind = kind;
     this.size = 11;
     this.attackCD = 0;
     this.vx = 0; this.vy = 0;
@@ -601,25 +607,95 @@ export class Minion {
     g.x = this.x; g.y = this.y;
     this.bob += 0.18;
     const f = Math.sin(this.bob) * 1.5;
-    // outer aura
-    g.fillStyle(0x7b2fbe, 0.28);
-    g.fillCircle(0, f, this.size + 5);
-    // ghostly body (oval)
-    g.fillStyle(0xc77dff, 0.85);
-    g.fillEllipse(0, f, this.size * 1.4, this.size * 1.7);
-    // wavy bottom (3 bumps)
-    g.fillCircle(-this.size * 0.4, f + this.size * 0.7, this.size * 0.32);
-    g.fillCircle(0, f + this.size * 0.8, this.size * 0.32);
-    g.fillCircle(this.size * 0.4, f + this.size * 0.7, this.size * 0.32);
-    // glowing white eyes
-    g.fillStyle(0xffffff, 1);
-    g.fillCircle(-this.size * 0.25, f - this.size * 0.2, 1.8);
-    g.fillCircle(this.size * 0.25, f - this.size * 0.2, 1.8);
-    // hp bar
-    if (this.hp < this.maxHp) {
-      g.fillStyle(0x000000, 0.6); g.fillRect(-12, -this.size - 8, 24, 3);
-      g.fillStyle(0xc77dff, 1); g.fillRect(-12, -this.size - 8, 24 * this.hp / this.maxHp, 3);
+    if (this.kind === 'gatherer') {
+      // 4-pointed cyan star
+      g.fillStyle(0x88ddff, 0.32);
+      g.fillCircle(0, f, this.size + 5);
+      g.fillStyle(0xb8eeff, 0.95);
+      g.fillTriangle(-this.size, f, 0, f - this.size * 1.3, this.size, f);
+      g.fillTriangle(-this.size, f, 0, f + this.size * 1.3, this.size, f);
+      g.fillTriangle(0, f - this.size, -this.size * 1.3, f, 0, f + this.size);
+      g.fillTriangle(0, f - this.size, this.size * 1.3, f, 0, f + this.size);
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(0, f, this.size * 0.45);
+    } else {
+      // Hunter ghost — purple aura + body + tail bumps + eyes
+      g.fillStyle(0x7b2fbe, 0.28);
+      g.fillCircle(0, f, this.size + 5);
+      g.fillStyle(0xc77dff, 0.85);
+      g.fillEllipse(0, f, this.size * 1.4, this.size * 1.7);
+      g.fillCircle(-this.size * 0.4, f + this.size * 0.7, this.size * 0.32);
+      g.fillCircle(0, f + this.size * 0.8, this.size * 0.32);
+      g.fillCircle(this.size * 0.4, f + this.size * 0.7, this.size * 0.32);
+      g.fillStyle(0xffffff, 1);
+      g.fillCircle(-this.size * 0.25, f - this.size * 0.2, 1.8);
+      g.fillCircle(this.size * 0.25, f - this.size * 0.2, 1.8);
+      // hp bar (only for hunters that can die)
+      if (this.hp < this.maxHp) {
+        g.fillStyle(0x000000, 0.6); g.fillRect(-12, -this.size - 8, 24, 3);
+        g.fillStyle(0xc77dff, 1); g.fillRect(-12, -this.size - 8, 24 * this.hp / this.maxHp, 3);
+      }
     }
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
+// Spectral turret — placed by the player, fires at enemies in range.
+// ────────────────────────────────────────
+export class Turret {
+  constructor(scene, x, y, hp, dmg, range, dmgType, fireRate) {
+    this.gfx = scene.add.graphics().setDepth(8);
+    this.x = x; this.y = y;
+    this.maxHp = hp; this.hp = hp;
+    this.dmg = dmg;
+    this.range = range;
+    this.dmgType = dmgType;
+    this.fireRate = fireRate;
+    this.fireT = 0;
+    this.size = 14;
+    this.aimAngle = 0;
+    this.coreColor = 0x88aaff;
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    // shadow
+    g.fillStyle(0x000000, 0.4);
+    g.fillEllipse(0, 9, 28, 9);
+    // base stone
+    g.fillStyle(0x2a2a3a, 1);
+    g.fillRect(-13, 0, 26, 9);
+    g.fillStyle(0x3a3a48, 1);
+    g.fillRect(-11, 2, 22, 4);
+    // turret dome
+    g.fillStyle(0x4a4a60, 1);
+    g.fillCircle(0, -2, 8);
+    g.fillStyle(0x6a6a80, 0.95);
+    g.fillCircle(-1, -3, 5);
+    // glowing core
+    g.fillStyle(this.coreColor, 0.85);
+    g.fillCircle(0, -2, 3);
+    // barrel rotated to aim
+    const ax = Math.cos(this.aimAngle), ay = Math.sin(this.aimAngle);
+    g.lineStyle(3.5, 0x5a5a70, 1);
+    g.beginPath();
+    g.moveTo(0, -2);
+    g.lineTo(ax * 14, -2 + ay * 14);
+    g.strokePath();
+    // tip glow
+    g.fillStyle(this.coreColor, 0.85);
+    g.fillCircle(ax * 14, -2 + ay * 14, 3);
+    // hp bar always visible
+    g.fillStyle(0x000000, 0.6);
+    g.fillRect(-15, -16, 30, 3);
+    g.fillStyle(this.coreColor, 1);
+    g.fillRect(-15, -16, 30 * Math.max(0, this.hp / this.maxHp), 3);
+    // range indicator (very subtle)
+    g.lineStyle(1, this.coreColor, 0.07);
+    g.strokeCircle(0, 0, this.range);
   }
   destroy() { this.gfx.destroy(); }
 }

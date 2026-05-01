@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GOAL_TIME } from '../config.js';
-import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion } from '../entities.js';
+import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion, Turret } from '../entities.js';
 import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES } from '../data.js';
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
@@ -155,6 +155,10 @@ export default class GameScene extends Phaser.Scene {
     this.trapT = 0;
     this.minions = [];
     this.minionT = 0;
+    this.gatherers = [];
+    this.gathererT = 0;
+    this.turrets = [];
+    this.turretT = 0;
     this.waveIdx = 0;
     this.bossWarningSent = new Set();
     this.bossMusicOn = false;
@@ -439,6 +443,8 @@ export default class GameScene extends Phaser.Scene {
     this.updateTrail(dt, p, dmgBoost);
     this.updateTraps(dt, p, dmgBoost);
     this.updateMinions(dt, p);
+    this.updateGatherers(dt, p);
+    this.updateTurrets(dt, p, dmgBoost);
 
     // ── Player projectiles
     for (const proj of this.projectiles) {
@@ -526,10 +532,12 @@ export default class GameScene extends Phaser.Scene {
     this.drawBg();
     for (const t of this.trail) t.redraw();
     for (const tr of this.traps) tr.redraw();
+    for (const tu of this.turrets) tu.redraw();
     p.redraw();
     for (const it of this.items) it.redraw();
     for (const e of this.enemies) e.redraw();
     for (const m of this.minions) m.redraw();
+    for (const g of this.gatherers) g.redraw();
     for (const proj of this.projectiles) proj.redraw();
     for (const ep of this.eprojectiles) ep.redraw();
     for (const o of this.orbs) o.redraw();
@@ -1040,6 +1048,130 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
+  updateGatherers(dt, p) {
+    const lvl = slv(p, 'gather');
+    if (lvl <= 0 && this.gatherers.length === 0) return;
+    if (lvl > 0) {
+      const max = lvl >= 5 ? 3 : lvl >= 3 ? 2 : 1;
+      const speed = lvl >= 5 ? 280 : lvl >= 2 ? 180 : 140;
+      this.gathererT -= dt;
+      if (this.gathererT <= 0 && this.gatherers.length < max) {
+        this.gathererT = 8;
+        const m = new Minion(this, p.x, p.y, 999, 0, speed, 'gatherer');
+        m.size = 9;
+        this.gatherers.push(m);
+        playSfx('itempickup');
+      }
+    }
+    const xpBoost = lvl >= 4 ? 1.5 : 1;
+    for (const g of this.gatherers) {
+      let target = null, td = Infinity;
+      for (const o of this.orbs) {
+        if (o.tagged) continue;
+        const d = Math.hypot(o.x - g.x, o.y - g.y);
+        if (d < td) { td = d; target = o; }
+      }
+      if (target) {
+        target.tagged = g;
+        const dx = target.x - g.x, dy = target.y - g.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        g.vx = (dx / dist) * g.speed;
+        g.vy = (dy / dist) * g.speed;
+        g.x += g.vx * dt;
+        g.y += g.vy * dt;
+        if (Math.hypot(g.x - target.x, g.y - target.y) < g.size + 8) {
+          // teleport orb to player and apply XP boost
+          target.value = Math.ceil(target.value * xpBoost);
+          target.x = p.x;
+          target.y = p.y;
+          target.tagged = null;
+        }
+      } else {
+        const dx = p.x - g.x, dy = p.y - g.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d > 70) {
+          g.vx = (dx / d) * g.speed * 0.6;
+          g.vy = (dy / d) * g.speed * 0.6;
+        } else {
+          g.vx *= 0.92; g.vy *= 0.92;
+        }
+        g.x += g.vx * dt;
+        g.y += g.vy * dt;
+      }
+    }
+    // clean up orbs that no longer exist (orb was collected) — clear `tagged`
+    for (const g of this.gatherers) {
+      // nothing per-gatherer
+    }
+  }
+
+  updateTurrets(dt, p, dmgBoost) {
+    const lvl = slv(p, 'turret');
+    if (lvl <= 0 && this.turrets.length === 0) return;
+    if (lvl > 0) {
+      const max = lvl >= 5 ? 4 : lvl >= 4 ? 3 : lvl >= 2 ? 2 : 1;
+      const interval = lvl >= 5 ? 3 : 5;
+      this.turretT -= dt;
+      if (this.turretT <= 0 && this.turrets.length < max) {
+        this.turretT = interval;
+        const hp = (60 + lvl * 12) * (lvl >= 4 ? 1.5 : 1);
+        const dmg = (12 + lvl * 4) * p.dmgM;
+        const range = 200 * (lvl >= 3 ? 1.5 : 1);
+        const dmgType = lvl >= 5 ? 'fire' : lvl >= 3 ? 'lightning' : 'physical';
+        const fireRate = lvl >= 5 ? 0.4 : 0.8;
+        const a = Math.random() * Math.PI * 2;
+        const t = new Turret(this, p.x + Math.cos(a) * 55, p.y + Math.sin(a) * 55, hp, dmg, range, dmgType, fireRate);
+        t.coreColor = dmgType === 'fire' ? 0xff7733 : dmgType === 'lightning' ? 0xffe066 : 0x88aaff;
+        this.turrets.push(t);
+        playSfx('itempickup');
+      }
+    }
+    this.turrets = this.turrets.filter(t => {
+      if (t.hp <= 0) {
+        this.fxNova(t.x, t.y, 30);
+        t.destroy();
+        return false;
+      }
+      let target = null, td = Infinity;
+      for (const e of this.enemies) {
+        if (e.charmed) continue;
+        const d = Math.hypot(e.x - t.x, e.y - t.y);
+        if (d < t.range && d < td) { td = d; target = e; }
+      }
+      if (target) {
+        t.aimAngle = Math.atan2(target.y - t.y, target.x - t.x);
+        t.fireT -= dt;
+        if (t.fireT <= 0) {
+          t.fireT = t.fireRate;
+          target.takeDamage(t.dmg * dmgBoost, t.dmgType, this);
+          this.fxTurretShot(t.x, t.y - 2, target.x, target.y, t.coreColor);
+        }
+      }
+      // melee enemies chip the turret
+      for (const e of this.enemies) {
+        if (e.charmed) continue;
+        if (Math.hypot(e.x - t.x, e.y - t.y) < e.size + t.size) {
+          t.hp -= e.dmg * dt * 1.5;
+        }
+      }
+      return true;
+    });
+  }
+
+  fxTurretShot(x1, y1, x2, y2, col) {
+    const g = this.add.graphics().setDepth(13);
+    g.lineStyle(2, col, 1);
+    g.beginPath();
+    g.moveTo(x1, y1);
+    g.lineTo(x2, y2);
+    g.strokePath();
+    this.tweens.add({
+      targets: g, alpha: 0,
+      duration: 130,
+      onComplete: () => g.destroy(),
+    });
+  }
+
   updateOrbs(dt, p) {
     this.orbs = this.orbs.filter(o => {
       o.life -= dt;
@@ -1146,6 +1278,8 @@ export default class GameScene extends Phaser.Scene {
       if (Math.hypot(e.x - target.x, e.y - target.y) < e.size + target.size) {
         const dmg = e.dmg * (e.charmedDmgMul || 1);
         target.takeDamage(dmg, 'physical', this);
+        // counter damage so the charmed minion can actually die in fights
+        e.hp -= target.dmg * 0.5;
       }
     } else {
       e.vx *= (1 - dt * 2);
