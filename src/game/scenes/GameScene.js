@@ -197,6 +197,10 @@ export default class GameScene extends Phaser.Scene {
     this.waveIdx = 0;
     // Dynamic difficulty: 1.0 = neutral, >1 spawn more, <1 spawn less. Adjusts based on player state.
     this.tension = 1.0;
+    // Combo / killstreak: increments on every kill, decays after a short window without kills.
+    this.comboCount = 0;
+    this.comboT = 0;
+    this.comboPeak = 0;
     this.bossWarningSent = new Set();
     this.bossMusicOn = false;
     this.bossSeen = new Set(); // enemy refs already announced
@@ -493,6 +497,9 @@ export default class GameScene extends Phaser.Scene {
       bosses,
       cooldowns,
       dps: Math.round(this.computeDps ? this.computeDps() : 0),
+      combo: this.comboCount || 0,
+      comboT: this.comboT || 0,
+      reviveLeft: p.metaReviveLeft || 0,
       players: playersInfo,
       stats: {
         speed: p.speed,
@@ -521,7 +528,9 @@ export default class GameScene extends Phaser.Scene {
 
     // ── Buff multipliers
     const speedBoost = (this.buffs.speed > 0 ? 2 : 1) * (this.buffs.curseSlowness > 0 ? 0.5 : 1);
-    const dmgBoost = (this.buffs.rage > 0 ? 2 : 1) * (this.buffs.damageBuff > 0 ? 1.5 : 1) * (this.buffs.curseWeakness > 0 ? 0.5 : 1);
+    // Combo bonus: +0.5% damage per kill in the active streak, capped at +50% (= 100 kills).
+    const comboBonus = 1 + Math.min(0.5, (this.comboCount || 0) * 0.005);
+    const dmgBoost = (this.buffs.rage > 0 ? 2 : 1) * (this.buffs.damageBuff > 0 ? 1.5 : 1) * (this.buffs.curseWeakness > 0 ? 0.5 : 1) * comboBonus;
     const freezeMult = (this.buffs.freeze > 0 ? 0.25 : 1) * (this.buffs.curseHaste > 0 ? 1.5 : 1);
     const shielded = this.buffs.shield > 0;
     const regenBuff = this.buffs.regen > 0 ? 8 : 0;
@@ -613,6 +622,12 @@ export default class GameScene extends Phaser.Scene {
     } else if (!hasBoss && this.bossMusicOn) {
       this.bossMusicOn = false;
       startMusic('normal');
+    }
+
+    // ── Combo decay
+    if (this.comboT > 0) {
+      this.comboT -= dt;
+      if (this.comboT <= 0) { this.comboCount = 0; this.comboT = 0; }
     }
 
     // ── Dynamic difficulty ─ scale spawn rate based on player state.
@@ -872,6 +887,10 @@ export default class GameScene extends Phaser.Scene {
           // Gold drop scales with enemy difficulty
           const goldGain = Math.max(1, Math.ceil((e.xpVal || 1) * 0.6 * (p.metaGoldMul || 1)));
           this.runGold += goldGain;
+          // Combo / killstreak: bump count and refresh the decay window.
+          this.comboCount = (this.comboCount || 0) + 1;
+          this.comboT = 4; // 4-second window
+          if (this.comboCount > (this.comboPeak || 0)) this.comboPeak = this.comboCount;
           if (p.kh) p.hp = Math.min(p.maxHp, p.hp + 8);
           this.fxDeath(e.x, e.y, ETYPES[e.type]?.col ?? 0xffffff);
           if (e.type === 'boss') {

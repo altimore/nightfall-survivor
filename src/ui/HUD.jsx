@@ -50,7 +50,17 @@ export default function HUD({ muted, onToggleMute }) {
           }}>{fmt(timeLeft)}</div>
           <div style={{ fontSize: '0.82em', color: '#7b2fbe', letterSpacing: 1 }}>
             {t('hud.level')}{s.lv} · ☠ {s.kills}
+            {s.reviveLeft > 0 && <span style={{ color: '#c77dff', marginLeft: '0.55em' }}>· ⚱{s.reviveLeft}</span>}
           </div>
+          {s.combo >= 5 && (
+            <div style={{
+              marginTop: 2, fontFamily: "'Cinzel',serif",
+              fontSize: '0.85em', letterSpacing: 2,
+              color: s.combo >= 50 ? '#ff4400' : s.combo >= 20 ? '#ffaa44' : '#ffe066',
+              textShadow: s.combo >= 50 ? '0 0 12px #ff4400' : '0 0 6px #ff8800',
+              transition: 'color .15s',
+            }}>×{s.combo} COMBO</div>
+          )}
         </div>
         <div style={{ width: '15em', display: 'flex', alignItems: 'center', gap: '0.5em' }}>
           <div style={{ flex: 1 }}>
