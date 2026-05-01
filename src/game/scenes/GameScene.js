@@ -308,7 +308,17 @@ export default class GameScene extends Phaser.Scene {
       hpMul *= 1 + eTier * 0.6;
       dmgMul *= 1 + eTier * 0.3;
     }
+    // Elite chance: ~4% on regular enemies after the 30s mark (never boss/treasure)
+    const eligibleElite = typeName !== 'boss' && typeName !== 'treasure' && this.elapsed > 30;
+    const elite = eligibleElite && Math.random() < 0.04;
+    if (elite) { hpMul *= 3; dmgMul *= 1.5; }
     const e = new Enemy(this, x, y, typeName, hpMul, 1, dmgMul);
+    if (elite) {
+      e.elite = true;
+      e.xpVal = (e.xpVal || 1) * 3;
+      // Slightly faster too
+      if (typeof e.speed === 'number') e.speed *= 1.2;
+    }
     if (typeName === 'boss') {
       const kinds = {
         shadow:  { col: 0x8b0000, eyeCol: 0xffff00, projCol: 0xff4400, move: 'standard', label: "Carcassemort" },
@@ -920,6 +930,16 @@ export default class GameScene extends Phaser.Scene {
             this.bossSeen.delete(e);
             // Boss death drops a "treasure chest" — multiple loot items spread out
             this.dropBossChest(e.x, e.y);
+          } else if (e.elite) {
+            // Elite enemies always drop a premium item + extra XP burst
+            this.rollDrops(e.type, e.x, e.y, 3.0);
+            const elitePool = ['megaheal', 'damageBuff', 'rage', 'shield', 'swiftness'];
+            const pick = elitePool[Math.floor(Math.random() * elitePool.length)];
+            this.items.push(new Item(this, e.x, e.y, pick));
+            // Bonus gold for elites
+            this.runGold += Math.ceil(8 * (p.metaGoldMul || 1));
+            this.fxNova(e.x, e.y, 50);
+            this.shake(0.006, 100);
           } else {
             // Normal enemies roll their loot table
             this.rollDrops(e.type, e.x, e.y, 1.0);

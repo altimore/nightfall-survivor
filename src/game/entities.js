@@ -245,6 +245,17 @@ export class Enemy {
     this.bob += 0.12;
     const hpRatio = this.hp / this.maxHp;
 
+    // Elite enemies: pulsing golden aura under the body
+    if (this.elite) {
+      const pulse = 0.55 + 0.25 * Math.sin(this.bob * 0.4);
+      g.fillStyle(0xffd966, pulse * 0.35);
+      g.fillCircle(0, 0, this.size + 11);
+      g.fillStyle(0xffd966, pulse * 0.55);
+      g.fillCircle(0, 0, this.size + 6);
+      g.lineStyle(1.5, 0xfff066, 0.85);
+      g.strokeCircle(0, 0, this.size + 9);
+    }
+
     switch (this.type) {
       case 'bat':      drawBat(g, this); break;
       case 'zombie':   drawZombie(g, this); break;
@@ -256,6 +267,15 @@ export class Enemy {
       default:
         g.fillStyle(this.col, 1);
         g.fillCircle(0, 0, this.size);
+    }
+    // Elite crown indicator
+    if (this.elite) {
+      g.fillStyle(0xffd966, 1);
+      const crownY = -this.size - 8;
+      g.fillTriangle(-5, crownY + 5, 0, crownY - 2, 5, crownY + 5);
+      g.fillTriangle(-8, crownY + 5, -5, crownY, -2, crownY + 5);
+      g.fillTriangle(2, crownY + 5, 5, crownY, 8, crownY + 5);
+      g.fillRect(-8, crownY + 4, 16, 2);
     }
 
     // Charmed (friendly minion) — pink halo + floating heart
