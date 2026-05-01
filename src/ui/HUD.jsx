@@ -82,6 +82,7 @@ export default function HUD({ muted, onToggleMute }) {
               background: 'transparent', border: '1px solid #3c096c',
               borderRadius: 4, color: muted ? '#4a1a6a' : '#c77dff',
               fontSize: '1.27em', cursor: 'pointer', padding: '0.15em 0.55em', flexShrink: 0,
+              pointerEvents: 'auto',
             }}>{muted ? '🔇' : '🔊'}</button>
         </div>
       </div>

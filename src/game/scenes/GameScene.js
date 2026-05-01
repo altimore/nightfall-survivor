@@ -767,6 +767,7 @@ export default class GameScene extends Phaser.Scene {
           pl.iframes = 0.9;
           playSfx('hit');
           this.shake(0.007, 130);
+          this.comboCount = Math.floor((this.comboCount || 0) / 2);
         }
       }
       // melee against minions & charmed (cooldown-gated to avoid 1-frame chunks)
@@ -880,6 +881,7 @@ export default class GameScene extends Phaser.Scene {
             pl.hp -= ep.dmg * this.fragility;
             pl.iframes = 0.7;
             playSfx('hit');
+            this.comboCount = Math.floor((this.comboCount || 0) / 2);
             ep.alive = false;
             break;
           }
