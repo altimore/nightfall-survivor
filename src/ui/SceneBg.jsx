@@ -88,41 +88,62 @@ export function DefeatBg() {
   return (
     <svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice" style={baseStyle}>
       <defs>
-        <radialGradient id="dg-sky" cx="50%" cy="40%" r="90%">
-          <stop offset="0%" stopColor="#5a0410" />
-          <stop offset="40%" stopColor="#2a0008" />
-          <stop offset="100%" stopColor="#000000" />
+        <linearGradient id="dg-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#0a0418" />
+          <stop offset="50%" stopColor="#160828" />
+          <stop offset="100%" stopColor="#000004" />
+        </linearGradient>
+        <radialGradient id="dg-moon" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#bca0d0" stopOpacity="0.85" />
+          <stop offset="60%" stopColor="#5a3a78" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#2a1845" stopOpacity="0" />
         </radialGradient>
-        <radialGradient id="dg-vignette" cx="50%" cy="50%" r="60%">
-          <stop offset="60%" stopColor="#000" stopOpacity="0" />
-          <stop offset="100%" stopColor="#000" stopOpacity="0.85" />
+        <radialGradient id="dg-vignette" cx="50%" cy="50%" r="65%">
+          <stop offset="55%" stopColor="#000" stopOpacity="0" />
+          <stop offset="100%" stopColor="#000" stopOpacity="0.95" />
         </radialGradient>
+        <linearGradient id="dg-fog" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3a2855" stopOpacity="0" />
+          <stop offset="100%" stopColor="#3a2855" stopOpacity="0.55" />
+        </linearGradient>
       </defs>
       <rect width="800" height="600" fill="url(#dg-sky)" />
-      {/* blood splashes */}
-      {[[120,90,90],[680,70,70],[60,400,140],[700,420,120],[400,560,160]].map(([x,y,r],i)=>(
-        <ellipse key={i} cx={x} cy={y} rx={r} ry={r*0.6} fill="#7b0010" opacity="0.4"/>
-      ))}
-      {/* crows silhouettes */}
-      {[[180,140,1],[260,100,-1],[600,160,1],[520,80,-1],[700,200,1]].map(([x,y,d],i)=>(
-        <path key={i} d={`M ${x-12*d} ${y} Q ${x-6*d} ${y-8} ${x} ${y} Q ${x+6*d} ${y-8} ${x+12*d} ${y}`} stroke="#000" strokeWidth="2" fill="none" opacity="0.6"/>
-      ))}
-      {/* ground */}
-      <rect x="0" y="480" width="800" height="120" fill="#0a0004" />
-      {/* broken weapon (cross-like in ground) */}
-      <g opacity="0.6">
-        <rect x="395" y="470" width="6" height="50" fill="#3a1a10"/>
-        <rect x="378" y="478" width="40" height="6" fill="#3a1a10"/>
+      {/* veiled moon — partly hidden by cloud bank */}
+      <circle cx="170" cy="140" r="80" fill="url(#dg-moon)" />
+      <circle cx="170" cy="140" r="32" fill="#d8c8e8" opacity="0.6" />
+      {/* heavy cloud bank across the upper third */}
+      <ellipse cx="220" cy="155" rx="200" ry="42" fill="#160a28" opacity="0.85" />
+      <ellipse cx="120" cy="170" rx="140" ry="34" fill="#0a0418" opacity="0.92" />
+      <ellipse cx="600" cy="120" rx="260" ry="48" fill="#160a28" opacity="0.7" />
+      {/* distant ruined skyline (broken towers) */}
+      <path d="M 0 440 L 50 440 L 50 380 L 60 380 L 60 360 L 80 360 L 80 380 L 95 380 L 95 440 L 130 440 L 130 410 L 150 410 L 150 440 L 200 440 L 200 350 L 215 340 L 220 350 L 220 440 L 290 440 L 290 400 L 320 400 L 320 380 L 335 380 L 335 360 L 350 380 L 350 440 L 800 440 L 800 600 L 0 600 Z" fill="#080014" opacity="0.95"/>
+      <path d="M 360 440 L 360 410 L 380 410 L 380 440 L 440 440 L 440 380 L 460 380 L 470 350 L 480 380 L 500 380 L 500 440 L 580 440 L 580 400 L 620 400 L 620 440 L 800 440 Z" fill="#0e041c" opacity="0.85"/>
+      {/* foreground fog */}
+      <rect x="0" y="380" width="800" height="220" fill="url(#dg-fog)" />
+      {/* fallen cross at center */}
+      <g opacity="0.85" transform="translate(400 510) rotate(-15)">
+        <rect x="-3" y="-50" width="6" height="80" fill="#1a0e08"/>
+        <rect x="-22" y="-30" width="44" height="6" fill="#1a0e08"/>
+        <ellipse cx="0" cy="32" rx="34" ry="6" fill="#000" opacity="0.6"/>
       </g>
-      {/* fallen tombstones */}
-      <g opacity="0.7">
-        <path d="M 100 510 L 230 540 L 230 580 L 100 555 Z" fill="#1a1a25"/>
-        <path d="M 540 520 L 700 555 L 700 590 L 540 568 Z" fill="#1a1a25"/>
+      {/* a few tilted tombstones in foreground */}
+      <g opacity="0.85" transform="translate(120 530) rotate(-7)">
+        <path d="M -22 30 L -22 -25 Q 0 -38 22 -25 L 22 30 Z" fill="#0c0c18"/>
+        <path d="M -19 28 L -19 -22 Q 0 -33 19 -22 L 19 28 Z" fill="#1a1a28" opacity="0.7"/>
       </g>
-      {/* falling embers */}
-      {[[100,200],[200,300],[300,250],[450,180],[550,320],[650,260],[700,150]].map(([x,y],i)=>(
-        <circle key={i} cx={x} cy={y} r={1.5+(i%2)} fill="#ff4400" opacity={0.5+(i%3)*0.12} />
+      <g opacity="0.85" transform="translate(680 540) rotate(8)">
+        <path d="M -20 30 L -20 -22 Q 0 -34 20 -22 L 20 30 Z" fill="#0c0c18"/>
+      </g>
+      {/* faint distant crows */}
+      {[[260,80,1],[330,60,-1],[500,70,1],[600,90,-1]].map(([x,y,d],i)=>(
+        <path key={i} d={`M ${x-10*d} ${y} Q ${x-5*d} ${y-6} ${x} ${y} Q ${x+5*d} ${y-6} ${x+10*d} ${y}`} stroke="#000" strokeWidth="1.5" fill="none" opacity="0.55"/>
       ))}
+      {/* subtle rain streaks */}
+      {Array.from({length: 32}).map((_, i) => {
+        const x = (i * 47 + 13) % 800;
+        const y = (i * 31 + 17) % 600;
+        return <line key={i} x1={x} y1={y} x2={x - 4} y2={y + 18} stroke="#88a0c0" strokeWidth="0.6" opacity="0.18"/>;
+      })}
       {/* vignette */}
       <rect width="800" height="600" fill="url(#dg-vignette)" />
     </svg>

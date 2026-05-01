@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GOAL_TIME } from '../config.js';
-import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile } from '../entities.js';
+import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion } from '../entities.js';
 import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES } from '../data.js';
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
@@ -144,13 +144,17 @@ export default class GameScene extends Phaser.Scene {
     this.elapsed = 0;
     this.kills = 0;
     this.spawnT = 1;
-    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, whip: 0 };
+    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, whip: 0, charm: 0 };
     this.orbitAngle = 0;
     this.orbitHits = new Map();
     this.trail = [];
     this.lastTrailX = this.W / 2;
     this.lastTrailY = this.H / 2;
     this.trailHits = new Map();
+    this.traps = [];
+    this.trapT = 0;
+    this.minions = [];
+    this.minionT = 0;
     this.waveIdx = 0;
     this.bossWarningSent = new Set();
     this.bossMusicOn = false;
@@ -252,6 +256,37 @@ export default class GameScene extends Phaser.Scene {
     for (const e of this.enemies) {
       if (e.type === 'boss') bosses.push({ name: e.name || 'BOSS', hp: Math.floor(e.hp), maxHp: e.maxHp });
     }
+    const cooldowns = {};
+    const r01 = (t, max) => Math.max(0, Math.min(1, 1 - t / max));
+    if (slv(p, 'dagger') > 0) cooldowns.dagger = r01(this.weaponT.dagger, slv(p, 'dagger') >= 3 ? 0.45 : 0.8);
+    if (slv(p, 'sword') > 0) {
+      const lv = slv(p, 'sword');
+      cooldowns.sword = r01(this.weaponT.sword, lv >= 5 ? 0.5 : lv >= 2 ? 0.85 : 1.1);
+    }
+    if (slv(p, 'whip') > 0) {
+      const lv = slv(p, 'whip');
+      cooldowns.whip = r01(this.weaponT.whip, lv >= 5 ? 0.6 : lv >= 3 ? 0.85 : 1.0);
+    }
+    if (slv(p, 'nova') > 0) {
+      const lv = slv(p, 'nova');
+      cooldowns.nova = r01(this.weaponT.nova, lv >= 4 ? 1.2 : 2);
+    }
+    if (slv(p, 'lightning') > 0) {
+      const lv = slv(p, 'lightning');
+      cooldowns.lightning = r01(this.weaponT.lightning, lv >= 5 ? 0.4 : lv >= 3 ? 0.8 : 1.5);
+    }
+    if (slv(p, 'charm') > 0) {
+      const lv = slv(p, 'charm');
+      cooldowns.charm = r01(this.weaponT.charm, lv >= 5 ? 5 : 8);
+    }
+    if (slv(p, 'traps') > 0) {
+      const lv = slv(p, 'traps');
+      cooldowns.traps = r01(this.trapT, lv >= 5 ? 1.5 : lv >= 4 ? 2 : 3);
+    }
+    if (slv(p, 'summon') > 0) {
+      const lv = slv(p, 'summon');
+      cooldowns.summon = r01(this.minionT, lv >= 5 ? 4 : 6);
+    }
     bus.emit('hud:update', {
       hp: Math.floor(p.hp),
       maxHp: p.maxHp,
@@ -264,6 +299,7 @@ export default class GameScene extends Phaser.Scene {
       skills: { ...p.skills },
       buffs: { ...this.buffs },
       bosses,
+      cooldowns,
       over: this.over,
     });
   }
@@ -390,7 +426,7 @@ export default class GameScene extends Phaser.Scene {
     // ── Enemy AI + collision
     for (const e of this.enemies) {
       this.updateEnemyAi(dt, e, p, freezeMult);
-      if (!shielded && p.iframes <= 0 && Math.hypot(e.x - p.x, e.y - p.y) < e.size + 14) {
+      if (!e.charmed && !shielded && p.iframes <= 0 && Math.hypot(e.x - p.x, e.y - p.y) < e.size + 14) {
         p.hp -= e.dmg;
         p.iframes = 0.9;
         playSfx('hit');
@@ -401,6 +437,8 @@ export default class GameScene extends Phaser.Scene {
     // ── Player weapons
     this.firePlayerWeapons(dt, p, dmgBoost);
     this.updateTrail(dt, p, dmgBoost);
+    this.updateTraps(dt, p, dmgBoost);
+    this.updateMinions(dt, p);
 
     // ── Player projectiles
     for (const proj of this.projectiles) {
@@ -487,9 +525,11 @@ export default class GameScene extends Phaser.Scene {
     // ── Render
     this.drawBg();
     for (const t of this.trail) t.redraw();
+    for (const tr of this.traps) tr.redraw();
     p.redraw();
     for (const it of this.items) it.redraw();
     for (const e of this.enemies) e.redraw();
+    for (const m of this.minions) m.redraw();
     for (const proj of this.projectiles) proj.redraw();
     for (const ep of this.eprojectiles) ep.redraw();
     for (const o of this.orbs) o.redraw();
@@ -549,6 +589,15 @@ export default class GameScene extends Phaser.Scene {
 
   updateEnemyAi(dt, e, p, freezeMult) {
     e.tickStatuses(dt, this);
+    if (e.charmed) {
+      e.charmedDur -= dt;
+      if (e.charmedDur <= 0) {
+        e.hp = 0;
+        return;
+      }
+      this.updateCharmedAi(dt, e);
+      return;
+    }
     const dx = p.x - e.x, dy = p.y - e.y;
     const dist = Math.hypot(dx, dy);
     const ndx = dist > 0 ? dx / dist : 0;
@@ -739,6 +788,28 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
+    const cmlv = slv(p, 'charm');
+    if (cmlv > 0) {
+      this.weaponT.charm -= dt;
+      if (this.weaponT.charm <= 0) {
+        this.weaponT.charm = cmlv >= 5 ? 5 : 8;
+        const count = cmlv >= 5 ? 3 : cmlv >= 3 ? 2 : 1;
+        const duration = cmlv >= 4 ? 10 : cmlv >= 2 ? 8 : 5;
+        const dmgMul = cmlv >= 4 ? 1.5 : 1;
+        const candidates = this.enemies
+          .filter(e => !e.charmed && e.type !== 'boss')
+          .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
+        for (let i = 0; i < count && i < candidates.length; i++) {
+          const e = candidates[i];
+          e.charmed = true;
+          e.charmedDur = duration;
+          e.charmedDmgMul = dmgMul;
+          this.fxCharm(e.x, e.y);
+        }
+        if (candidates.length > 0) playSfx('itempickup');
+      }
+    }
+
     const wlv = slv(p, 'whip');
     if (wlv > 0) {
       this.weaponT.whip -= dt;
@@ -856,6 +927,119 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  updateTraps(dt, p, dmgBoost) {
+    const lvl = slv(p, 'traps');
+    if (lvl > 0) {
+      const interval = lvl >= 5 ? 1.5 : lvl >= 4 ? 2 : 3;
+      const radius = (50 + lvl * 8) * (lvl >= 3 ? 1.5 : 1);
+      const dmg = (25 + lvl * 8) * p.dmgM * dmgBoost * (lvl >= 4 ? 1.3 : 1);
+      const count = lvl >= 2 ? 2 : 1;
+      this.trapT -= dt;
+      if (this.trapT <= 0) {
+        this.trapT = interval;
+        for (let i = 0; i < count; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const dist = i === 0 ? 0 : 25 + Math.random() * 30;
+          this.traps.push(new TrapMine(this, p.x + Math.cos(a) * dist, p.y + Math.sin(a) * dist, radius, dmg));
+        }
+      }
+    }
+    this.traps = this.traps.filter(t => {
+      if (t.armTime > 0) t.armTime -= dt;
+      t.life -= dt;
+      if (t.life <= 0) { t.destroy(); return false; }
+      if (t.armTime > 0) return true;
+      for (const e of this.enemies) {
+        if (Math.hypot(e.x - t.x, e.y - t.y) < t.triggerR + e.size) {
+          for (const e2 of this.enemies) {
+            if (Math.hypot(e2.x - t.x, e2.y - t.y) < t.radius + e2.size) {
+              const dealt = e2.takeDamage(t.dmg, 'fire', this);
+              if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+              if (lvl >= 5) e2.statuses.frozen = { duration: 0.5 };
+            }
+          }
+          this.fxNova(t.x, t.y, t.radius);
+          this.shake(0.005, 90);
+          playSfx('nova');
+          t.destroy();
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  updateMinions(dt, p) {
+    const lvl = slv(p, 'summon');
+    if (lvl <= 0 && this.minions.length === 0) return;
+    if (lvl > 0) {
+      const maxMinions = lvl >= 4 ? 3 : lvl >= 2 ? 2 : 1;
+      const interval = lvl >= 5 ? 4 : 6;
+      const hp = Math.round((30 + lvl * 8) * (lvl >= 3 ? 1.5 : 1));
+      const dmg = (8 + lvl * 3) * (lvl >= 3 ? 1.3 : 1);
+      this.minionT -= dt;
+      if (this.minionT <= 0 && this.minions.length < maxMinions) {
+        this.minionT = interval;
+        const a = Math.random() * Math.PI * 2;
+        this.minions.push(new Minion(this, p.x + Math.cos(a) * 35, p.y + Math.sin(a) * 35, hp, dmg, 145));
+        playSfx('itempickup');
+      }
+    }
+    this.minions = this.minions.filter(m => {
+      if (m.hp <= 0) {
+        if (lvl >= 5) {
+          for (const e of this.enemies) {
+            if (Math.hypot(e.x - m.x, e.y - m.y) < 70 + e.size) {
+              e.takeDamage(20 + lvl * 4, 'fire', this);
+            }
+          }
+          this.fxNova(m.x, m.y, 70);
+          this.shake(0.004, 70);
+          playSfx('nova');
+        }
+        m.destroy();
+        return false;
+      }
+      let target = null, td = Infinity;
+      for (const e of this.enemies) {
+        if (e.charmed) continue;
+        const d = Math.hypot(e.x - m.x, e.y - m.y);
+        if (d < td) { td = d; target = e; }
+      }
+      if (target) {
+        const dx = target.x - m.x, dy = target.y - m.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const ndx = dx / dist, ndy = dy / dist;
+        const tvx = ndx * m.speed;
+        const tvy = ndy * m.speed;
+        const k = 1 - Math.exp(-4 * dt);
+        m.vx += (tvx - m.vx) * k;
+        m.vy += (tvy - m.vy) * k;
+        m.x += m.vx * dt;
+        m.y += m.vy * dt;
+        m.attackCD = Math.max(0, m.attackCD - dt);
+        if (m.attackCD <= 0 && Math.hypot(m.x - target.x, m.y - target.y) < m.size + target.size) {
+          target.takeDamage(m.dmg, 'physical', this);
+          m.attackCD = 0.5;
+          // minion takes a bit of damage on contact
+          m.hp -= target.dmg * 0.4;
+        }
+      } else {
+        const dx = p.x - m.x, dy = p.y - m.y;
+        const d = Math.hypot(dx, dy);
+        if (d > 100) {
+          m.vx = (dx / d) * 90;
+          m.vy = (dy / d) * 90;
+        } else {
+          m.vx *= 0.92; m.vy *= 0.92;
+        }
+        m.x += m.vx * dt;
+        m.y += m.vy * dt;
+      }
+      return true;
+    });
+  }
+
   updateOrbs(dt, p) {
     this.orbs = this.orbs.filter(o => {
       o.life -= dt;
@@ -939,6 +1123,55 @@ export default class GameScene extends Phaser.Scene {
       e.vx += Math.cos(a) * 80;
       e.vy += Math.sin(a) * 80;
     }
+  }
+
+  updateCharmedAi(dt, e) {
+    let target = null, td = Infinity;
+    for (const o of this.enemies) {
+      if (o === e || o.charmed) continue;
+      const d = Math.hypot(o.x - e.x, o.y - e.y);
+      if (d < td) { td = d; target = o; }
+    }
+    if (target) {
+      const dx = target.x - e.x, dy = target.y - e.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const ndx = dx / dist, ndy = dy / dist;
+      const tvx = ndx * e.speed * 1.2;
+      const tvy = ndy * e.speed * 1.2;
+      const k = 1 - Math.exp(-4 * dt);
+      e.vx += (tvx - e.vx) * k;
+      e.vy += (tvy - e.vy) * k;
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+      if (Math.hypot(e.x - target.x, e.y - target.y) < e.size + target.size) {
+        const dmg = e.dmg * (e.charmedDmgMul || 1);
+        target.takeDamage(dmg, 'physical', this);
+      }
+    } else {
+      e.vx *= (1 - dt * 2);
+      e.vy *= (1 - dt * 2);
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+    }
+  }
+
+  fxCharm(x, y) {
+    const g = this.add.graphics().setDepth(13);
+    g.x = x; g.y = y;
+    g.fillStyle(0xff7da8, 0.55);
+    g.fillCircle(0, 0, 24);
+    g.lineStyle(2, 0xff66aa, 1);
+    g.strokeCircle(0, 0, 24);
+    // floating heart
+    g.fillStyle(0xff66aa, 0.95);
+    g.fillCircle(-3, -5, 4);
+    g.fillCircle(3, -5, 4);
+    g.fillTriangle(-7, -3, 7, -3, 0, 8);
+    this.tweens.add({
+      targets: g, alpha: 0, scale: 1.6, y: y - 30,
+      duration: 600,
+      onComplete: () => g.destroy(),
+    });
   }
 
   applyWhipStrike(p, angle, length, width, dmg) {

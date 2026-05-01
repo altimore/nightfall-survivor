@@ -159,6 +159,21 @@ export class Enemy {
         g.fillCircle(0, 0, this.size);
     }
 
+    // Charmed (friendly minion) — pink halo + floating heart
+    if (this.charmed) {
+      const flick = (Math.sin(this.bob * 1.4) + 1) * 0.5;
+      g.fillStyle(0xff7da8, 0.28);
+      g.fillCircle(0, 0, this.size + 6);
+      g.lineStyle(1.5, 0xff99cc, 0.8);
+      g.strokeCircle(0, 0, this.size + 6);
+      // tiny heart above
+      g.fillStyle(0xff66aa, 0.7 + flick * 0.3);
+      const hy = -this.size - 10;
+      g.fillCircle(-3, hy, 2.6);
+      g.fillCircle(3, hy, 2.6);
+      g.fillTriangle(-5, hy + 1, 5, hy + 1, 0, hy + 7);
+    }
+
     // Status visuals (frozen tint, burning flames, poison bubbles, shock arcs)
     const s = this.statuses;
     if (s.frozen) {
@@ -561,6 +576,96 @@ export class TrailTile {
     // glow rim
     g.lineStyle(1.5, 0xb8ff66, 0.5 * fade);
     g.strokeCircle(0, 0, r);
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
+// Spectral minion — friendly summoned wisp that hunts the closest enemy.
+// ────────────────────────────────────────
+export class Minion {
+  constructor(scene, x, y, hp, dmg, speed) {
+    this.gfx = scene.add.graphics().setDepth(11);
+    this.x = x; this.y = y;
+    this.maxHp = hp; this.hp = hp;
+    this.dmg = dmg; this.speed = speed;
+    this.size = 11;
+    this.attackCD = 0;
+    this.vx = 0; this.vy = 0;
+    this.bob = Math.random() * Math.PI * 2;
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    this.bob += 0.18;
+    const f = Math.sin(this.bob) * 1.5;
+    // outer aura
+    g.fillStyle(0x7b2fbe, 0.28);
+    g.fillCircle(0, f, this.size + 5);
+    // ghostly body (oval)
+    g.fillStyle(0xc77dff, 0.85);
+    g.fillEllipse(0, f, this.size * 1.4, this.size * 1.7);
+    // wavy bottom (3 bumps)
+    g.fillCircle(-this.size * 0.4, f + this.size * 0.7, this.size * 0.32);
+    g.fillCircle(0, f + this.size * 0.8, this.size * 0.32);
+    g.fillCircle(this.size * 0.4, f + this.size * 0.7, this.size * 0.32);
+    // glowing white eyes
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(-this.size * 0.25, f - this.size * 0.2, 1.8);
+    g.fillCircle(this.size * 0.25, f - this.size * 0.2, 1.8);
+    // hp bar
+    if (this.hp < this.maxHp) {
+      g.fillStyle(0x000000, 0.6); g.fillRect(-12, -this.size - 8, 24, 3);
+      g.fillStyle(0xc77dff, 1); g.fillRect(-12, -this.size - 8, 24 * this.hp / this.maxHp, 3);
+    }
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
+// Spectral trap mine — armed after a short delay, explodes AoE on contact.
+// ────────────────────────────────────────
+export class TrapMine {
+  constructor(scene, x, y, radius, dmg) {
+    this.gfx = scene.add.graphics().setDepth(3);
+    this.x = x; this.y = y;
+    this.radius = radius;       // explosion AoE
+    this.triggerR = 18;         // contact trigger radius
+    this.dmg = dmg;
+    this.life = 12;             // disappears after 12 s if not triggered
+    this.armTime = 0.35;        // arming delay before it can trigger
+    this.bob = Math.random() * Math.PI * 2;
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    this.bob += 0.18;
+    const armed = this.armTime <= 0;
+    const pulse = (Math.sin(this.bob * 2.5) + 1) * 0.5;
+    // dark base
+    g.fillStyle(0x1a0008, 0.85);
+    g.fillCircle(0, 0, this.triggerR);
+    // spike teeth around (5)
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + this.bob * 0.04;
+      g.fillStyle(0x6a0010, 1);
+      g.fillTriangle(
+        Math.cos(a) * 5, Math.sin(a) * 5,
+        Math.cos(a) * (this.triggerR + 5), Math.sin(a) * (this.triggerR + 5),
+        Math.cos(a + 0.4) * 5, Math.sin(a + 0.4) * 5
+      );
+    }
+    // pulsing red core (bright when armed)
+    const coreCol = armed ? 0xff2233 : 0xaa3344;
+    g.fillStyle(coreCol, 0.5 + pulse * 0.5);
+    g.fillCircle(0, 0, 5 + pulse * 2);
+    // glyph
+    g.lineStyle(1, 0xff8888, armed ? 0.7 : 0.3);
+    g.strokeCircle(0, 0, this.triggerR - 2);
   }
   destroy() { this.gfx.destroy(); }
 }

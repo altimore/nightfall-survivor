@@ -129,15 +129,32 @@ export default function HUD({ muted, onToggleMute }) {
           {skillEntries.map(([id, lv]) => {
             const sk = SKILLS[id];
             if (!sk) return null;
+            const cd = s.cooldowns?.[id];
+            const showCd = typeof cd === 'number' && cd < 1;
             return (
               <div key={id} style={{
+                position: 'relative',
                 background: 'rgba(8,0,22,.85)',
                 border: `1px solid ${sk.color}45`,
                 borderRadius: 4, padding: '0.18em 0.6em',
                 display: 'flex', alignItems: 'center', gap: '0.36em',
+                overflow: 'hidden',
               }}>
                 <span style={{ fontSize: '1.1em' }}>{sk.icon}</span>
                 <span style={{ color: sk.color, fontSize: '0.91em' }}>{'●'.repeat(lv)}{'○'.repeat(sk.max - lv)}</span>
+                {showCd && (
+                  <div style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0, height: 3,
+                    background: 'rgba(20,8,40,0.8)',
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${cd * 100}%`,
+                      background: sk.color,
+                      transition: 'width 0.13s linear',
+                    }}/>
+                  </div>
+                )}
               </div>
             );
           })}

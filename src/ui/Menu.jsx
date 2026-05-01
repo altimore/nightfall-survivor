@@ -5,7 +5,7 @@ import { useGamepadActions } from './useGamepad.js';
 import { useT, getLang, setLang } from '../i18n.js';
 import { playSfx } from '../game/audio.js';
 
-const WEAPONS = ['dagger', 'sword', 'whip', 'nova', 'lightning', 'orbit', 'trail'];
+const WEAPONS = ['dagger', 'sword', 'whip', 'nova', 'lightning', 'orbit', 'trail', 'traps', 'charm', 'summon'];
 
 export default function Menu({ onStart, weapon, onWeaponChange, uiScale, setUiScale }) {
   const t = useT();
