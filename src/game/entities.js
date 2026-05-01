@@ -446,15 +446,22 @@ function drawWitch(g, e) {
 }
 
 function drawBoss(g, e) {
+  switch (e.kind) {
+    case 'frost':   drawBossFrost(g, e); break;
+    case 'inferno': drawBossInferno(g, e); break;
+    case 'void':    drawBossVoid(g, e); break;
+    case 'shadow':
+    default:        drawBossShadow(g, e); break;
+  }
+}
+
+function drawBossShadow(g, e) {
   const s = e.size;
   const pulse = 1 + Math.sin(e.bob * 0.3) * 0.04;
-  // dark aura
   g.fillStyle(0x4a0020, 0.35);
   g.fillCircle(0, 0, s * 1.4 * pulse);
-  // body (jagged dark mass)
   g.fillStyle(e.col, 1);
   g.fillCircle(0, 0, s);
-  // spikes around body
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
     const x1 = Math.cos(a) * s, y1 = Math.sin(a) * s;
@@ -462,17 +469,13 @@ function drawBoss(g, e) {
     const ax = -Math.sin(a) * s * 0.2, ay = Math.cos(a) * s * 0.2;
     g.fillTriangle(x1 - ax, y1 - ay, x2, y2, x1 + ax, y1 + ay);
   }
-  // horns
   g.fillStyle(0x2a0010, 1);
   g.fillTriangle(-s * 0.7, -s * 0.5, -s * 1.1, -s * 1.4, -s * 0.3, -s * 0.7);
   g.fillTriangle(s * 0.7, -s * 0.5, s * 1.1, -s * 1.4, s * 0.3, -s * 0.7);
-  // mouth (jagged)
   g.fillStyle(0x000000, 1);
   g.fillEllipse(0, s * 0.4, s * 0.85, s * 0.45);
-  // teeth
   g.fillStyle(0xffffff, 1);
   for (let i = -3; i <= 3; i++) g.fillTriangle(i * s * 0.13, s * 0.25, i * s * 0.13 + s * 0.07, s * 0.55, i * s * 0.13 - s * 0.07, s * 0.55);
-  // huge yellow eyes
   g.fillStyle(0x000000, 1);
   g.fillCircle(-s * 0.35, -s * 0.15, s * 0.27);
   g.fillCircle(s * 0.35, -s * 0.15, s * 0.27);
@@ -482,6 +485,111 @@ function drawBoss(g, e) {
   g.fillStyle(0xff0000, 1);
   g.fillCircle(-s * 0.35, -s * 0.12, s * 0.07);
   g.fillCircle(s * 0.35, -s * 0.12, s * 0.07);
+}
+
+function drawBossFrost(g, e) {
+  const s = e.size;
+  const pulse = 1 + Math.sin(e.bob * 0.3) * 0.05;
+  // icy aura
+  g.fillStyle(0x88ccff, 0.25);
+  g.fillCircle(0, 0, s * 1.6 * pulse);
+  // body — diamond shape
+  g.fillStyle(e.col, 1);
+  g.fillTriangle(0, -s * 1.1, -s * 1.05, 0, 0, s * 1.05);
+  g.fillTriangle(0, -s * 1.1, s * 1.05, 0, 0, s * 1.05);
+  // ice shards radiating
+  g.fillStyle(0xc0e0ff, 0.85);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + e.bob * 0.05;
+    const x1 = Math.cos(a) * s * 0.85, y1 = Math.sin(a) * s * 0.85;
+    const x2 = Math.cos(a) * s * 1.55, y2 = Math.sin(a) * s * 1.55;
+    const ax = -Math.sin(a) * s * 0.18, ay = Math.cos(a) * s * 0.18;
+    g.fillTriangle(x1 - ax, y1 - ay, x2, y2, x1 + ax, y1 + ay);
+  }
+  // central frosted highlight
+  g.fillStyle(0xe0f5ff, 0.7);
+  g.fillCircle(-s * 0.3, -s * 0.3, s * 0.3);
+  // single glowing eye
+  g.fillStyle(0x0a1828, 1);
+  g.fillCircle(0, -s * 0.1, s * 0.32);
+  g.fillStyle(e.eyeCol, 1);
+  g.fillCircle(0, -s * 0.1, s * 0.22);
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(0, -s * 0.1, s * 0.08);
+  // jagged teeth at bottom
+  g.fillStyle(0xe0f5ff, 1);
+  for (let i = -2; i <= 2; i++) g.fillTriangle(i * s * 0.18, s * 0.3, i * s * 0.18 + s * 0.08, s * 0.65, i * s * 0.18 - s * 0.08, s * 0.65);
+}
+
+function drawBossInferno(g, e) {
+  const s = e.size;
+  const flick = 0.85 + Math.sin(e.bob * 4) * 0.15;
+  // fiery aura — dancing flames
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + e.bob * 0.3;
+    const r1 = s * 1.05, r2 = s * (1.4 + Math.sin(e.bob * 3 + i) * 0.15);
+    g.fillStyle(0xff5511, 0.55);
+    g.fillTriangle(Math.cos(a) * r1, Math.sin(a) * r1, Math.cos(a) * r2, Math.sin(a) * r2, Math.cos(a + 0.45) * r1, Math.sin(a + 0.45) * r1);
+  }
+  // core body — molten
+  g.fillStyle(0x6a1808, 1);
+  g.fillCircle(0, 0, s);
+  g.fillStyle(e.col, 1);
+  g.fillCircle(0, 0, s * 0.85);
+  g.fillStyle(0xffaa44, flick);
+  g.fillCircle(-s * 0.2, -s * 0.2, s * 0.4);
+  g.fillStyle(0xffe066, 0.85);
+  g.fillCircle(-s * 0.3, -s * 0.3, s * 0.18);
+  // single cyclops eye
+  g.fillStyle(0x000000, 1);
+  g.fillCircle(0, -s * 0.05, s * 0.34);
+  g.fillStyle(e.eyeCol, 1);
+  g.fillCircle(0, -s * 0.05, s * 0.24);
+  g.fillStyle(0xff0000, 1);
+  g.fillRect(-s * 0.1, -s * 0.12, s * 0.2, s * 0.14);
+  // gnashing maw
+  g.fillStyle(0x000000, 1);
+  g.fillEllipse(0, s * 0.5, s * 0.9, s * 0.4);
+  g.fillStyle(0xffaa44, 0.9);
+  for (let i = -3; i <= 3; i++) g.fillTriangle(i * s * 0.13, s * 0.32, i * s * 0.13 + s * 0.07, s * 0.62, i * s * 0.13 - s * 0.07, s * 0.62);
+}
+
+function drawBossVoid(g, e) {
+  const s = e.size;
+  const pulse = 1 + Math.sin(e.bob * 0.4) * 0.06;
+  // void portal aura
+  g.fillStyle(0x2a0a55, 0.35);
+  g.fillCircle(0, 0, s * 1.7 * pulse);
+  g.fillStyle(0x4a1a8a, 0.45);
+  g.fillCircle(0, 0, s * 1.3);
+  // body — translucent blob
+  g.fillStyle(e.col, 0.78);
+  g.fillCircle(0, 0, s);
+  // rotating tendrils
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + e.bob * 0.2;
+    g.lineStyle(2.5, 0xb088ff, 0.7);
+    g.beginPath();
+    g.moveTo(Math.cos(a) * s * 0.4, Math.sin(a) * s * 0.4);
+    const mx = Math.cos(a + 0.4) * s * 0.85, my = Math.sin(a + 0.4) * s * 0.85;
+    const ex = Math.cos(a + 0.7) * s * 1.3, ey = Math.sin(a + 0.7) * s * 1.3;
+    g.lineTo(mx, my);
+    g.lineTo(ex, ey);
+    g.strokePath();
+  }
+  // multiple eyes (5 — chaotic placement)
+  const eyes = [[-s * 0.4, -s * 0.3], [s * 0.4, -s * 0.3], [0, -s * 0.6], [-s * 0.25, s * 0.05], [s * 0.25, s * 0.05]];
+  for (const [ex, ey] of eyes) {
+    g.fillStyle(0x000000, 1);
+    g.fillCircle(ex, ey, s * 0.13);
+    g.fillStyle(e.eyeCol, 1);
+    g.fillCircle(ex, ey, s * 0.085);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(ex - s * 0.02, ey - s * 0.02, s * 0.03);
+  }
+  // sliver mouth
+  g.fillStyle(0x000000, 1);
+  g.fillRect(-s * 0.5, s * 0.45, s, s * 0.08);
 }
 
 // ────────────────────────────────────────
