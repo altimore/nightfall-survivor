@@ -221,14 +221,19 @@ export default class GameScene extends Phaser.Scene {
 
   get W() { return this.scale.width; }
   get H() { return this.scale.height; }
+  // Virtual world is 2× viewport so players can wander beyond the spawn area.
+  get WORLD_W() { return this.scale.width * 2; }
+  get WORLD_H() { return this.scale.height * 2; }
 
   create() {
     this.cameras.main.setBackgroundColor('#060011');
+    this.cameras.main.setBounds(0, 0, this.WORLD_W, this.WORLD_H);
 
     this.bgGfx = this.add.graphics().setDepth(-10);
-    this.radarGfx = this.add.graphics().setDepth(50);
+    // Radar and joystick stay fixed on screen (don't scroll with the world).
+    this.radarGfx = this.add.graphics().setDepth(50).setScrollFactor(0);
     this.orbitGfx = this.add.graphics().setDepth(14);
-    this.joyGfx = this.add.graphics().setDepth(50);
+    this.joyGfx = this.add.graphics().setDepth(50).setScrollFactor(0);
 
     this.decorations = this.generateDecor();
     this.scale.on('resize', () => { this.decorations = this.generateDecor(); });
@@ -251,9 +256,12 @@ export default class GameScene extends Phaser.Scene {
       if (ch?.apply) ch.apply(p);
     };
 
+    // World-space spawn at the world center
+    const wcx = this.WORLD_W / 2;
+    const wcy = this.WORLD_H / 2;
     this.players = [];
     if (num === 1) {
-      const p = new Player(this, this.W / 2, this.H / 2, 0, CONTROLLER_SOLO);
+      const p = new Player(this, wcx, wcy, 0, CONTROLLER_SOLO);
       initPlayer(p, startW);
       this.players.push(p);
     } else {
@@ -263,13 +271,15 @@ export default class GameScene extends Phaser.Scene {
       for (let i = 0; i < num; i++) {
         const ang = (i / num) * Math.PI * 2 - Math.PI / 2;
         const r = 70;
-        const px = this.W / 2 + Math.cos(ang) * r;
-        const py = this.H / 2 + Math.sin(ang) * r;
+        const px = wcx + Math.cos(ang) * r;
+        const py = wcy + Math.sin(ang) * r;
         const p = new Player(this, px, py, i, controllers[i]);
         initPlayer(p, startWeapons[i]);
         this.players.push(p);
       }
     }
+    // Initial camera centred on the spawn
+    this.cameras.main.centerOn(wcx, wcy);
     if (this.mode === 'oneShot') {
       for (const p of this.players) {
         p.maxHp = 1; p.hp = 1; p.dmgM = 100;
@@ -419,8 +429,18 @@ export default class GameScene extends Phaser.Scene {
   spawnEnemy(typeName) {
     const angle = Math.random() * Math.PI * 2;
     const dist = Math.max(this.W, this.H) * 0.58;
-    const x = this.W / 2 + Math.cos(angle) * dist;
-    const y = this.H / 2 + Math.sin(angle) * dist;
+    // Spawn around the centroid of alive players (so enemies always come at them
+    // even when the camera scrolls).
+    const alive = this.players?.filter(pl => !pl.dead) || [];
+    const list = alive.length > 0 ? alive : (this.players || []);
+    let cx = this.WORLD_W / 2, cy = this.WORLD_H / 2;
+    if (list.length > 0) {
+      cx = 0; cy = 0;
+      for (const pl of list) { cx += pl.x; cy += pl.y; }
+      cx /= list.length; cy /= list.length;
+    }
+    const x = cx + Math.cos(angle) * dist;
+    const y = cy + Math.sin(angle) * dist;
     const tier = Math.floor(this.elapsed / 60);
     let hpMul = 1 + tier * 0.3;
     let dmgMul = 1 + tier * 0.1;
@@ -1200,6 +1220,21 @@ export default class GameScene extends Phaser.Scene {
       this.emitRunStats();
       bus.emit('phase', 'victory');
       this.emitHud();
+    }
+
+    // ── Camera follow centroid of alive players (lerp)
+    {
+      const alive = this.players.filter(pl => !pl.dead);
+      const list = alive.length > 0 ? alive : this.players;
+      let cx = 0, cy = 0;
+      for (const pl of list) { cx += pl.x; cy += pl.y; }
+      cx /= list.length; cy /= list.length;
+      const cam = this.cameras.main;
+      const targetX = cx - cam.width / 2;
+      const targetY = cy - cam.height / 2;
+      const k = 1 - Math.exp(-3.5 * dt);
+      cam.scrollX += (targetX - cam.scrollX) * k;
+      cam.scrollY += (targetY - cam.scrollY) * k;
     }
 
     // ── Render
@@ -3523,8 +3558,9 @@ export default class GameScene extends Phaser.Scene {
   generateDecor() {
     const list = [];
     const TILE = 220;
-    for (let x = TILE / 2; x < this.W; x += TILE) {
-      for (let y = TILE / 2; y < this.H; y += TILE) {
+    const WW = this.WORLD_W, WH = this.WORLD_H;
+    for (let x = TILE / 2; x < WW; x += TILE) {
+      for (let y = TILE / 2; y < WH; y += TILE) {
         let h = ((x | 0) * 73856093) ^ ((y | 0) * 19349663);
         h = (h ^ (h >>> 13)) * 1274126177;
         h = h ^ (h >>> 16);
@@ -3606,11 +3642,12 @@ export default class GameScene extends Phaser.Scene {
     g.clear();
     const t = this.elapsed;
     const biome = this.biome || BIOMES.cemetery;
+    const WW = this.WORLD_W, WH = this.WORLD_H;
 
-    // Hex grid — biome-themed colour
+    // Hex grid — biome-themed colour, drawn over the entire world.
     g.lineStyle(1, biome.gridColor, 0.10);
-    for (let x = 0; x < this.W + 80; x += 80) {
-      for (let y = 0; y < this.H + 70; y += 70) {
+    for (let x = 0; x < WW + 80; x += 80) {
+      for (let y = 0; y < WH + 70; y += 70) {
         g.beginPath();
         for (let i = 0; i < 6; i++) {
           const a = Math.PI / 3 * i - Math.PI / 6;
@@ -3628,14 +3665,14 @@ export default class GameScene extends Phaser.Scene {
     // Mist — animated (movement is intentional, slow ambient drift), biome-tinted
     g.fillStyle(biome.accent, 0.07);
     for (let i = 0; i < 5; i++) {
-      const fx = (this.W * 0.5) + Math.cos(t * 0.05 + i * 1.7) * (this.W * 0.45);
-      const fy = (this.H * 0.5) + Math.sin(t * 0.04 + i * 2.3) * (this.H * 0.45);
+      const fx = (WW * 0.5) + Math.cos(t * 0.05 + i * 1.7) * (WW * 0.45);
+      const fy = (WH * 0.5) + Math.sin(t * 0.04 + i * 2.3) * (WH * 0.45);
       g.fillCircle(fx, fy, 130 + Math.sin(t * 0.3 + i) * 30);
     }
     g.fillStyle(0x1a0040, 0.06);
     for (let i = 0; i < 3; i++) {
-      const fx = (this.W * 0.5) + Math.cos(t * 0.07 + i * 3.1) * (this.W * 0.5);
-      const fy = (this.H * 0.5) + Math.sin(t * 0.08 + i * 1.5) * (this.H * 0.5);
+      const fx = (WW * 0.5) + Math.cos(t * 0.07 + i * 3.1) * (WW * 0.5);
+      const fy = (WH * 0.5) + Math.sin(t * 0.08 + i * 1.5) * (WH * 0.5);
       g.fillCircle(fx, fy, 200);
     }
   }
