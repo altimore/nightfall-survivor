@@ -43,11 +43,11 @@ export default function HUD({ muted, onToggleMute }) {
         <div style={{ textAlign: 'center', flex: 1, padding: '0 0.7em' }}>
           <div style={{
             fontFamily: "'Cinzel Decorative',serif", fontSize: '1.7em',
-            color: danger ? '#ff2244' : '#c77dff',
-            textShadow: `0 0 ${danger ? 20 : 8}px ${danger ? '#ff0040' : '#7b2fbe'}`,
+            color: s.endless ? '#ffaa44' : (danger ? '#ff2244' : '#c77dff'),
+            textShadow: s.endless ? '0 0 16px #ff8800' : `0 0 ${danger ? 20 : 8}px ${danger ? '#ff0040' : '#7b2fbe'}`,
             transition: 'all .3s',
             lineHeight: 1.1,
-          }}>{fmt(timeLeft)}</div>
+          }}>{s.endless ? `♾ TIER ${s.endless}` : fmt(timeLeft)}</div>
           <div style={{ fontSize: '0.82em', color: '#7b2fbe', letterSpacing: 1 }}>
             {t('hud.level')}{s.lv} · ☠ {s.kills}
             {s.reviveLeft > 0 && <span style={{ color: '#c77dff', marginLeft: '0.55em' }}>· ⚱{s.reviveLeft}</span>}

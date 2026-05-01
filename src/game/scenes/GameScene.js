@@ -531,6 +531,7 @@ export default class GameScene extends Phaser.Scene {
       combo: this.comboCount || 0,
       comboT: this.comboT || 0,
       reviveLeft: p.metaReviveLeft || 0,
+      endless: this.endless ? (this.endlessTier || 1) : 0,
       players: playersInfo,
       stats: {
         speed: p.speed,

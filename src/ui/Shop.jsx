@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { META_UPGRADES, getMetaState, buyUpgrade } from '../game/meta.js';
+import { META_UPGRADES, getMetaState, buyUpgrade, resetMeta } from '../game/meta.js';
 import { useT } from '../i18n.js';
 import { useGamepadActions } from './useGamepad.js';
 import { playSfx } from '../game/audio.js';
@@ -139,7 +139,30 @@ export default function Shop({ onClose }) {
 
         <GlobalStatsPanel state={state} />
 
-        <div style={{ marginTop: '1.3em', textAlign: 'center', color: '#b69ad8', fontSize: '0.82em', letterSpacing: 2 }}>
+        <div style={{ marginTop: '1em', textAlign: 'center' }}>
+          <button
+            onClick={() => {
+              if (confirm('Réinitialiser TOUTE la méta-progression ? (or + upgrades + stats globales)')) {
+                resetMeta();
+                setState(getMetaState());
+                playSfx('hit');
+              }
+            }}
+            onMouseDown={e => e.preventDefault()}
+            tabIndex={-1}
+            style={{
+              padding: '0.4em 1em',
+              background: 'transparent',
+              border: '1px solid #6c3483aa',
+              color: '#9d4edd',
+              fontFamily: "'Cinzel',serif", fontSize: '0.78em', letterSpacing: 2,
+              cursor: 'pointer', borderRadius: 3,
+              opacity: 0.7,
+            }}
+          >🗑 RESET MÉTA</button>
+        </div>
+
+        <div style={{ marginTop: '0.8em', textAlign: 'center', color: '#b69ad8', fontSize: '0.82em', letterSpacing: 2 }}>
           {t('shop.hint') || 'L\'or se gagne en tuant des ennemis · ÉCHAP / B pour fermer'}
         </div>
       </div>
