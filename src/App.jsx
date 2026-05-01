@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createGame, setOptions } from './game/PhaserGame.js';
 import { bus } from './game/bus.js';
-import { setMuted, stopMusic, startMusic, initAudio } from './game/audio.js';
+import { setMuted, stopMusic, startMusic, initAudio, playSfx } from './game/audio.js';
 import HUD from './ui/HUD.jsx';
 import Menu from './ui/Menu.jsx';
 import EndScreen from './ui/EndScreen.jsx';
@@ -72,6 +72,7 @@ export default function App() {
   }), []);
   useEffect(() => bus.on('runStats', setRunStats), []);
   useEffect(() => bus.on('achievement', a => {
+    playSfx('achievement');
     setAchievementQueue(q => [...q, { ...a, key: Date.now() + Math.random() }]);
   }), []);
 

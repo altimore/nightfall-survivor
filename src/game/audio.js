@@ -75,6 +75,11 @@ const SFX_FNS = {
   eprojshoot:a => { noiseBlast(a,.05,.08,2000); },
   uimove:    a => { tone(a,1100,'sine',.003,.02,.04,.10); },
   uipick:    a => { tone(a,880,'sine',.005,.04,.12,.18); tone(a,1320,'sine',.01,.04,.10,.12,.04); },
+  crit:      a => { tone(a,1480,'square',.002,.04,.18,.20); tone(a,2200,'sine',.005,.03,.10,.14,.02); noiseBlast(a,.08,.06,4000); },
+  achievement:a => { [523,659,784,1047,1319].forEach((f,i) => tone(a,f,'sine',.005,.06,.22,.28,i*.05)); },
+  evolution: a => { [392,587,784,988,1175].forEach((f,i) => tone(a,f,'sine',.008,.10,.30,.32,i*.06)); tone(a,55,'sine',.01,.15,.5,.4,.05); },
+  eliteSpawn:a => { tone(a,220,'square',.01,.08,.25,.22); tone(a,330,'sawtooth',.005,.06,.18,.18,.05); noiseBlast(a,.08,.12,800); },
+  eliteKill: a => { [659,784,988].forEach((f,i) => tone(a,f,'sine',.005,.06,.20,.25,i*.04)); noiseBlast(a,.1,.08,1500,.02); },
 };
 
 const HAPTICS = {
@@ -87,6 +92,10 @@ const HAPTICS = {
   victory:  () => navigator.vibrate?.([50,30,50,30,50,30,200]),
   itempickup: () => navigator.vibrate?.([20,10,40]),
   bossWarning: () => navigator.vibrate?.([200, 80, 200, 80, 400]),
+  crit:       () => navigator.vibrate?.(50),
+  evolution:  () => navigator.vibrate?.([40,20,40,20,80,20,160]),
+  achievement:() => navigator.vibrate?.([20,10,20,10,30]),
+  eliteKill:  () => navigator.vibrate?.([40,20,80]),
 };
 
 export function playSfx(name) {

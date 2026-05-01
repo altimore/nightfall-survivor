@@ -971,6 +971,7 @@ export default class GameScene extends Phaser.Scene {
             this.fxNova(e.x, e.y, 50);
             this.shake(0.006, 100);
             this.fxBanner('★ ÉLITE VAINCU ★', '#ffd966', 24);
+            playSfx('eliteKill');
           } else {
             // Normal enemies roll their loot table
             this.rollDrops(e.type, e.x, e.y, 1.0);
@@ -2461,7 +2462,7 @@ export default class GameScene extends Phaser.Scene {
       p.hp = Math.min(p.maxHp, p.hp + 30);
       this.fxNova(p.x, p.y, 80);
       this.shake(0.008, 220);
-      playSfx('victory');
+      playSfx('evolution');
       this.fxBanner('✦ ÉVOLUTION ✦', '#ffd966', 32);
     } else {
       p.skills[id] = (p.skills[id] || 0) + 1;
@@ -2611,6 +2612,7 @@ export default class GameScene extends Phaser.Scene {
     const dealt = target.takeDamage(finalAmount, type, this);
     if (dealt > 0 && isCrit) {
       this.fxDamage(target.x, target.y, dealt, true);
+      playSfx('crit');
     }
     if (dealt > 0 && weaponId) {
       this.damageStats[weaponId] = (this.damageStats[weaponId] || 0) + dealt;
