@@ -126,7 +126,7 @@ export default function Menu({ onStart, weapon, onWeaponChange, uiScale, setUiSc
                   }}
                 >
                   <div style={{ fontSize: '1.6em', marginBottom: 3 }}>{sk.icon}</div>
-                  <div style={{ fontSize: '0.82em' }}>{sk.name}</div>
+                  <div style={{ fontSize: '0.82em' }}>{t(`skills.${id}`)}</div>
                 </button>
               );
             })}

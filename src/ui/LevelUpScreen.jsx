@@ -160,7 +160,7 @@ export default function LevelUpScreen({ lv, choices, skills, onPick }) {
                 }}>↵</div>
               )}
               <div style={{ fontSize: '2.5em', marginBottom: 7 }}>{sk.icon}</div>
-              <div style={{ color: sk.color, fontSize: '1em', letterSpacing: 1, marginBottom: 5 }}>{sk.name}</div>
+              <div style={{ color: sk.color, fontSize: '1em', letterSpacing: 1, marginBottom: 5 }}>{t(`skills.${id}`)}</div>
               {curLv > 0 ? (
                 <div style={{ marginBottom: 5 }}>
                   <span style={{ color: `${sk.color}50`, fontSize: '1em' }}>{'●'.repeat(curLv)}</span>

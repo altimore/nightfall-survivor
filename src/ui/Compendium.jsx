@@ -69,13 +69,13 @@ export default function Compendium({ onClose }) {
 
         <Section title={`⚔ ${t('compendium.weapons')}`} color="#c77dff">
           {weapons.map(([id, sk]) => (
-            <SkillCard key={id} sk={sk} />
+            <SkillCard key={id} id={id} sk={sk} t={t} />
           ))}
         </Section>
 
         <Section title={`🛡 ${t('compendium.passives')}`} color="#80ffdb">
           {passives.map(([id, sk]) => (
-            <SkillCard key={id} sk={sk} />
+            <SkillCard key={id} id={id} sk={sk} t={t} />
           ))}
         </Section>
 
@@ -118,7 +118,8 @@ function Section({ title, color, children }) {
   );
 }
 
-function SkillCard({ sk }) {
+function SkillCard({ id, sk, t }) {
+  const name = t ? t(`skills.${id}`) : sk.name;
   return (
     <div style={{
       background: 'rgba(8,0,22,0.85)',
@@ -129,7 +130,7 @@ function SkillCard({ sk }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5em', marginBottom: '0.5em' }}>
         <span style={{ fontSize: '1.6em' }}>{sk.icon}</span>
-        <span style={{ color: sk.color, fontSize: '1em', letterSpacing: 1 }}>{sk.name}</span>
+        <span style={{ color: sk.color, fontSize: '1em', letterSpacing: 1 }}>{name}</span>
       </div>
       <ol style={{ margin: 0, paddingLeft: '1.2em', color: '#d8b8f0', fontSize: '0.82em', lineHeight: 1.45 }}>
         {sk.desc.map((d, i) => (

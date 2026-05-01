@@ -325,9 +325,10 @@ export default class GameScene extends Phaser.Scene {
 
     // ── Buff multipliers
     const speedBoost = this.buffs.speed > 0 ? 2 : 1;
-    const dmgBoost = this.buffs.rage > 0 ? 2 : 1;
+    const dmgBoost = (this.buffs.rage > 0 ? 2 : 1) * (this.buffs.damageBuff > 0 ? 1.5 : 1);
     const freezeMult = this.buffs.freeze > 0 ? 0.25 : 1;
     const shielded = this.buffs.shield > 0;
+    const regenBuff = this.buffs.regen > 0 ? 8 : 0;
 
     // ── Buffs tick down
     for (const k in this.buffs) {
@@ -377,7 +378,8 @@ export default class GameScene extends Phaser.Scene {
     p.x = Math.max(15, Math.min(this.W - 15, p.x));
     p.y = Math.max(15, Math.min(this.H - 15, p.y));
     p.iframes = Math.max(0, p.iframes - dt);
-    if (p.regen > 0) p.hp = Math.min(p.maxHp, p.hp + p.regen * dt);
+    const totalRegen = (p.regen || 0) + regenBuff;
+    if (totalRegen > 0) p.hp = Math.min(p.maxHp, p.hp + totalRegen * dt);
 
     // ── Wave schedule
     while (this.waveIdx < WAVES.length && this.elapsed >= WAVES[this.waveIdx].t) {
@@ -434,7 +436,7 @@ export default class GameScene extends Phaser.Scene {
     // ── Item spawner
     this.itemTimer -= dt;
     if (this.itemTimer <= 0) {
-      this.itemTimer = 15 + Math.random() * 10;
+      this.itemTimer = 9 + Math.random() * 7;
       this.spawnItem();
     }
 
@@ -605,6 +607,8 @@ export default class GameScene extends Phaser.Scene {
     const p = this.player;
     if (type === 'heal') {
       p.hp = Math.min(p.maxHp, p.hp + 40);
+    } else if (type === 'megaheal') {
+      p.hp = Math.min(p.maxHp, p.hp + 80);
     } else if (type === 'magnet') {
       for (const o of this.orbs) { o.x = p.x; o.y = p.y; }
     } else {

@@ -85,14 +85,17 @@ export const xpFor = lv => XP_TABLE[Math.min(lv, XP_TABLE.length-1)] || lv*300+4
 // Ground items
 // ════════════════════════════════════════
 export const ITEMS = {
-  heal:   { name:'Potion de vie',  icon:'🧪', col:'#ff4d6d', colNum:0xff4d6d, desc:'+40 PV instantané'       },
-  rage:   { name:'Rage de sang',   icon:'💢', col:'#ff4400', colNum:0xff4400, desc:'Dégâts ×2 · 8s'          },
-  shield: { name:'Bouclier sacré', icon:'🛡️', col:'#80ffdb', colNum:0x80ffdb, desc:'Invincible · 5s'         },
-  freeze: { name:'Cristal glacé',  icon:'❄️', col:'#88ddff', colNum:0x88ddff, desc:'Ennemis -70% vitesse · 6s'},
-  speed:  { name:'Bottes ailées',  icon:'💨', col:'#ffe066', colNum:0xffe066, desc:'Vitesse ×2 · 8s'          },
-  magnet: { name:'Aimant arcane',  icon:'🌀', col:'#ffb347', colNum:0xffb347, desc:'Attire tous les XP orbes' },
+  heal:      { name:'Potion de vie',    icon:'🧪', col:'#ff4d6d', colNum:0xff4d6d, desc:'+40 PV instantané'       },
+  megaheal:  { name:'Grand calice',     icon:'🍷', col:'#ff8aa8', colNum:0xff8aa8, desc:'+80 PV instantané'       },
+  regen:     { name:'Encens sacré',     icon:'🌿', col:'#8fff9b', colNum:0x8fff9b, desc:'Régénération +8 PV/s · 6s'},
+  rage:      { name:'Rage de sang',     icon:'💢', col:'#ff4400', colNum:0xff4400, desc:'Dégâts ×2 · 8s'          },
+  damageBuff:{ name:"Glyphe d'acuité",  icon:'⚡', col:'#ffe066', colNum:0xffe066, desc:'Dégâts +50% · 10s'        },
+  shield:    { name:'Bouclier sacré',   icon:'🛡️', col:'#80ffdb', colNum:0x80ffdb, desc:'Invincible · 5s'         },
+  freeze:    { name:'Cristal glacé',    icon:'❄️', col:'#88ddff', colNum:0x88ddff, desc:'Ennemis -70% vitesse · 6s'},
+  speed:     { name:'Bottes ailées',    icon:'💨', col:'#ffe066', colNum:0xffe066, desc:'Vitesse ×2 · 8s'          },
+  magnet:    { name:'Aimant arcane',    icon:'🌀', col:'#ffb347', colNum:0xffb347, desc:'Attire tous les XP orbes' },
 };
-export const ITEM_DURATIONS = { heal:0, rage:8, shield:5, freeze:6, speed:8, magnet:0 };
+export const ITEM_DURATIONS = { heal:0, megaheal:0, regen:6, rage:8, damageBuff:10, shield:5, freeze:6, speed:8, magnet:0 };
 export const ITEM_KEYS = Object.keys(ITEMS);
 
 // ════════════════════════════════════════
