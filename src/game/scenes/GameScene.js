@@ -171,6 +171,7 @@ export default class GameScene extends Phaser.Scene {
     this.clouds = [];
     this.nests = [];
     this.nestSpawnT = 25;
+    this.treasureT = 30 + Math.random() * 15;
     this.obstacles = [];
     this.trail = [];
     this.traps = [];
@@ -283,6 +284,22 @@ export default class GameScene extends Phaser.Scene {
       e.kindLabel = k.label;
       e.phaseT = 5;
     }
+    this.enemies.push(e);
+  }
+
+  spawnTreasure() {
+    const side = Math.floor(Math.random() * 4);
+    let x, y, dx, dy;
+    if (side === 0) { x = -30; y = 80 + Math.random() * (this.H - 160); dx = 1; dy = (Math.random() - 0.5) * 0.4; }
+    else if (side === 1) { x = this.W + 30; y = 80 + Math.random() * (this.H - 160); dx = -1; dy = (Math.random() - 0.5) * 0.4; }
+    else if (side === 2) { x = 80 + Math.random() * (this.W - 160); y = -30; dx = (Math.random() - 0.5) * 0.4; dy = 1; }
+    else { x = 80 + Math.random() * (this.W - 160); y = this.H + 30; dx = (Math.random() - 0.5) * 0.4; dy = -1; }
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len; dy /= len;
+    const e = new Enemy(this, x, y, 'treasure', 1, 1, 1);
+    e.treasureDx = dx;
+    e.treasureDy = dy;
+    e.lifetime = 9;
     this.enemies.push(e);
   }
 
@@ -400,11 +417,13 @@ export default class GameScene extends Phaser.Scene {
     this.elapsed += dt;
 
     // ── Buff multipliers
-    const speedBoost = this.buffs.speed > 0 ? 2 : 1;
-    const dmgBoost = (this.buffs.rage > 0 ? 2 : 1) * (this.buffs.damageBuff > 0 ? 1.5 : 1);
-    const freezeMult = this.buffs.freeze > 0 ? 0.25 : 1;
+    const speedBoost = (this.buffs.speed > 0 ? 2 : 1) * (this.buffs.curseSlowness > 0 ? 0.5 : 1);
+    const dmgBoost = (this.buffs.rage > 0 ? 2 : 1) * (this.buffs.damageBuff > 0 ? 1.5 : 1) * (this.buffs.curseWeakness > 0 ? 0.5 : 1);
+    const freezeMult = (this.buffs.freeze > 0 ? 0.25 : 1) * (this.buffs.curseHaste > 0 ? 1.5 : 1);
     const shielded = this.buffs.shield > 0;
     const regenBuff = this.buffs.regen > 0 ? 8 : 0;
+    this.confused = this.buffs.curseConfusion > 0;
+    this.fragility = this.buffs.curseFragility > 0 ? 2 : 1;
 
     // ── Buffs tick down
     for (const k in this.buffs) {
@@ -423,6 +442,33 @@ export default class GameScene extends Phaser.Scene {
     for (const pl of this.players) {
       if (pl.dead) continue;
       this.updatePlayerMovement(dt, pl, speedBoost, regenBuff, pads);
+    }
+
+    // ── Revive: a downed player who has a living teammate within 80 px revives
+    // after 3 s with 50 % HP. Outside the range the timer slowly drains.
+    if (this.players.length > 1) {
+      for (const pl of this.players) {
+        if (!pl.dead) continue;
+        let nearAlly = false;
+        for (const o of this.players) {
+          if (o === pl || o.dead) continue;
+          if (Math.hypot(o.x - pl.x, o.y - pl.y) < 80) { nearAlly = true; break; }
+        }
+        if (nearAlly) {
+          pl.reviveT = (pl.reviveT || 0) + dt;
+          if (pl.reviveT >= 3) {
+            pl.dead = false;
+            pl.hp = Math.max(1, Math.floor(pl.maxHp * 0.5));
+            pl.reviveT = 0;
+            pl.iframes = 1.5;
+            this.fxNova(pl.x, pl.y, 60);
+            this.shake(0.005, 100);
+            playSfx('levelup');
+          }
+        } else {
+          pl.reviveT = Math.max(0, (pl.reviveT || 0) - dt * 0.5);
+        }
+      }
     }
 
     // ── Wave schedule (skipped in boss-rush mode — handled separately below)
@@ -522,7 +568,7 @@ export default class GameScene extends Phaser.Scene {
       for (const pl of this.players) {
         if (pl.dead) continue;
         if (!shielded && pl.iframes <= 0 && Math.hypot(e.x - pl.x, e.y - pl.y) < e.size + 14) {
-          pl.hp -= e.dmg;
+          pl.hp -= e.dmg * this.fragility;
           pl.iframes = 0.9;
           playSfx('hit');
           this.shake(0.007, 130);
@@ -569,6 +615,13 @@ export default class GameScene extends Phaser.Scene {
     }
     // Nests: shared (uses any alive player for spawn-distance check)
     this.updateNests(dt, this.players.find(pl => !pl.dead) || this.players[0]);
+
+    // Treasure: occasional fast streak across the screen
+    this.treasureT -= dt;
+    if (this.treasureT <= 0) {
+      this.treasureT = 32 + Math.random() * 20;
+      this.spawnTreasure();
+    }
 
     // ── Player projectiles
     for (const proj of this.projectiles) {
@@ -625,7 +678,7 @@ export default class GameScene extends Phaser.Scene {
         for (const pl of this.players) {
           if (pl.dead || pl.iframes > 0) continue;
           if (Math.hypot(ep.x - pl.x, ep.y - pl.y) < 15) {
-            pl.hp -= ep.dmg;
+            pl.hp -= ep.dmg * this.fragility;
             pl.iframes = 0.7;
             playSfx('hit');
             ep.alive = false;
@@ -672,16 +725,31 @@ export default class GameScene extends Phaser.Scene {
     });
     this.enemies = this.enemies.filter(e => {
       if (e.hp <= 0) {
-        this.kills++;
-        playSfx(e.type === 'boss' ? 'boss' : 'death');
-        const value = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM);
-        this.orbs.push(new XpOrb(this, e.x, e.y, value));
-        if (p.kh) p.hp = Math.min(p.maxHp, p.hp + 8);
-        this.fxDeath(e.x, e.y, ETYPES[e.type]?.col ?? 0xffffff);
-        if (e.type === 'boss') {
-          this.shake(0.012, 280);
-          this.hitstop = 0.08;
-          this.bossSeen.delete(e);
+        if (e.type === 'treasure') {
+          // big bonus on kill: drop a burst of XP orbs
+          const baseValue = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM);
+          for (let i = 0; i < 10; i++) {
+            const a = (i / 10) * Math.PI * 2 + Math.random() * 0.4;
+            const r = 8 + Math.random() * 22;
+            this.orbs.push(new XpOrb(this, e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, baseValue));
+          }
+          this.fxNova(e.x, e.y, 50);
+          this.shake(0.006, 120);
+          playSfx('victory');
+          // (no kill counter increment for the streak — pure loot)
+        } else {
+          this.kills++;
+          if (p && p.id != null) p.kills = (p.kills || 0) + 1;
+          playSfx(e.type === 'boss' ? 'boss' : 'death');
+          const value = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM);
+          this.orbs.push(new XpOrb(this, e.x, e.y, value));
+          if (p.kh) p.hp = Math.min(p.maxHp, p.hp + 8);
+          this.fxDeath(e.x, e.y, ETYPES[e.type]?.col ?? 0xffffff);
+          if (e.type === 'boss') {
+            this.shake(0.012, 280);
+            this.hitstop = 0.08;
+            this.bossSeen.delete(e);
+          }
         }
         e.destroy();
         return false;
@@ -714,7 +782,7 @@ export default class GameScene extends Phaser.Scene {
     for (const n of this.nests) n.redraw();
     for (const o of this.obstacles) o.redraw();
     for (const tu of this.turrets) tu.redraw();
-    for (const pl of this.players) if (!pl.dead) pl.redraw();
+    for (const pl of this.players) pl.redraw();
     for (const it of this.items) it.redraw();
     for (const e of this.enemies) e.redraw();
     for (const m of this.minions) m.redraw();
@@ -805,6 +873,7 @@ export default class GameScene extends Phaser.Scene {
     }
     const ml = Math.hypot(mx, my);
     if (ml > 1) { mx /= ml; my /= ml; }
+    if (this.confused) { mx = -mx; my = -my; }
     if (p.dashDur > 0) {
       p.dashDur -= dt;
       p.x += p.dashDir.x * 520 * dt;
@@ -1033,6 +1102,15 @@ export default class GameScene extends Phaser.Scene {
           this.fireBossPattern(e, p, pattern);
           playSfx('eprojshoot');
         }
+        break;
+      }
+      case 'treasure': {
+        // Streaks across the screen in a fixed direction at high speed
+        e.x += (e.treasureDx ?? 0) * e.speed * dt;
+        e.y += (e.treasureDy ?? 0) * e.speed * dt;
+        directMove = true;
+        e.lifetime = (e.lifetime ?? 9) - dt;
+        if (e.lifetime <= 0) e.hp = -1;
         break;
       }
       case 'direct':

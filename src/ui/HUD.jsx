@@ -85,13 +85,24 @@ export default function HUD({ muted, onToggleMute }) {
                 opacity: pl.dead ? 0.55 : 1,
               }}>
                 <span style={{ color: tint, fontSize: '0.82em', letterSpacing: 2 }}>P{pl.id + 1}</span>
-                <div style={{ width: '8em' }}>
+                <div style={{ width: '7em' }}>
                   <div style={{ fontSize: '0.78em', color: '#ff4d6d', letterSpacing: 1 }}>❤ {pl.hp}/{pl.maxHp}</div>
                   <div style={{ height: '0.4em', background: '#1a0010', borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{
                       height: '100%',
                       width: `${Math.max(0, pl.hp / pl.maxHp * 100)}%`,
                       background: 'linear-gradient(90deg,#8b0000,#ff2244)',
+                      borderRadius: 3,
+                    }}/>
+                  </div>
+                </div>
+                <div style={{ width: '7em' }}>
+                  <div style={{ fontSize: '0.78em', color: '#9d4edd', letterSpacing: 1 }}>✦ {pl.xp}/{pl.xpN}</div>
+                  <div style={{ height: '0.4em', background: '#0a0020', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${Math.min(100, (pl.xp / pl.xpN) * 100)}%`,
+                      background: `linear-gradient(90deg, ${tint}66, ${tint})`,
                       borderRadius: 3,
                     }}/>
                   </div>

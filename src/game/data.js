@@ -45,6 +45,8 @@ export const ETYPES = {
               resists: { fire: 0, dark: 0.7, holy: 1.3 } },
   boss:     { label:"BOSS",          icon:"👹", col:0x8b0000, eyeCol:0xffff00, size:28, baseHp:600, baseSpd:26, dmg:22, xpVal:60, behavior:"boss",   wave:-1,
               resists: { all: 0.75 } },
+  treasure: { label:"Sprite Doré",   icon:"💰", col:0xffd966, eyeCol:0xffffff, size:11, baseHp:35,  baseSpd:95, dmg:0,  xpVal:8, behavior:"treasure", wave:-1,
+              resists: { all: 1 } },
 };
 
 // Damage type → status effect template (applied on hit when resist > 0)
@@ -109,10 +111,16 @@ export const ITEMS = {
   elementIce:      { name:'Souffle glacial',  icon:'❄️', col:'#88ccff', colNum:0x88ccff, desc:'Attaques physiques → glace · 12s' },
   elementLightning:{ name:"Charge d'orage",   icon:'⚡', col:'#ffe066', colNum:0xffe066, desc:'Attaques physiques → foudre · 12s' },
   elementPoison:   { name:'Toxine spectrale', icon:'🧪', col:'#88dd33', colNum:0x88dd33, desc:'Attaques physiques → poison · 12s' },
+  curseWeakness:    { name:'Sceau de faiblesse', icon:'🩸', col:'#8b2a3a', colNum:0x8b2a3a, desc:'Malédiction : dégâts -50% · 12s' },
+  curseSlowness:    { name:'Chaîne lourde',     icon:'🐢', col:'#5a4a2a', colNum:0x5a4a2a, desc:'Malédiction : vitesse -50% · 12s' },
+  curseFragility:   { name:'Voile fragile',     icon:'💀', col:'#6a2a4a', colNum:0x6a2a4a, desc:'Malédiction : +100% dégâts subis · 10s' },
+  curseConfusion:   { name:'Brume confuse',     icon:'🌀', col:'#4a4a6a', colNum:0x4a4a6a, desc:'Malédiction : contrôles inversés · 8s' },
+  curseHaste:       { name:'Hâte spectrale',    icon:'👁️', col:'#6a2a2a', colNum:0x6a2a2a, desc:'Malédiction : ennemis +50% vitesse · 10s' },
 };
 export const ITEM_DURATIONS = {
   heal:0, megaheal:0, regen:6, rage:8, damageBuff:10, shield:5, freeze:6, speed:8, magnet:0, nuke:0, vacuum:0,
   elementFire:12, elementIce:12, elementLightning:12, elementPoison:12,
+  curseWeakness:12, curseSlowness:12, curseFragility:10, curseConfusion:8, curseHaste:10,
 };
 export const ITEM_KEYS = Object.keys(ITEMS);
 

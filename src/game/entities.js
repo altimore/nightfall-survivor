@@ -70,8 +70,33 @@ export class Player {
     const g = this.gfx;
     g.clear();
     g.x = this.x; g.y = this.y;
+    if (this.dead) {
+      // Tombe au sol avec barre de résurrection
+      g.fillStyle(0x000000, 0.5);
+      g.fillEllipse(0, 12, 32, 9);
+      g.fillStyle(0x2a2a35, 1);
+      g.fillRoundedRect(-13, -13, 26, 26, 11);
+      g.fillStyle(0x3a3a48, 0.85);
+      g.fillRoundedRect(-11, -11, 22, 22, 9);
+      g.fillStyle(0x0a0a14, 0.85);
+      g.fillRect(-1.5, -8, 3, 14);
+      g.fillRect(-6, -3, 12, 3);
+      if (this.reviveT > 0) {
+        g.fillStyle(0x220006, 0.85);
+        g.fillRect(-16, -22, 32, 3);
+        g.fillStyle(0xc77dff, 1);
+        g.fillRect(-16, -22, 32 * Math.min(1, this.reviveT / 3), 3);
+      }
+      return;
+    }
     const flash = this.iframes > 0 && Math.floor(this.iframes * 12) % 2 === 0;
     if (flash) return;
+    const tint = this.tint;
+    // Coloured platform under the feet (player ID identifier)
+    g.fillStyle(tint, 0.32);
+    g.fillEllipse(0, 18, 30, 8);
+    g.lineStyle(1.5, tint, 0.85);
+    g.strokeEllipse(0, 18, 30, 8);
     // Cape (triangle behind body)
     g.fillStyle(0x1e0a3c, 0.85);
     g.fillTriangle(-13, -2, 0, 22, 13, -2);
@@ -84,8 +109,8 @@ export class Player {
     // Face
     g.fillStyle(0xe0b896, 1);
     g.fillCircle(0, -3, 7);
-    // Glowing eyes
-    g.fillStyle(0xff0040, 1);
+    // Glowing eyes — tinted to player color
+    g.fillStyle(tint, 1);
     g.fillCircle(-3, -4, 2);
     g.fillCircle(3, -4, 2);
     // Dash ready ring
