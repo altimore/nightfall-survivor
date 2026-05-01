@@ -71,7 +71,7 @@ export class Player {
     this.character = 'vampire'; // overridden by GameScene with the chosen class
     this.bob = Math.random() * Math.PI * 2;
     // Per-player weapon state
-    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, chargedBolt: 0, whip: 0, charm: 0, missile: 0, grenade: 0 };
+    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, chargedBolt: 0, whip: 0, charm: 0, missile: 0, grenade: 0, bow: 0, boomerang: 0, iceRing: 0 };
     this.orbitAngle = 0;
     this.orbitHits = new Map();
     this.lastTrailX = x;
@@ -871,6 +871,84 @@ export class Projectile {
     // glow trail
     g.fillStyle(0xc7e0ff, 0.45);
     g.fillTriangle(-22, -1.2, -12, 0, -22, 1.2);
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
+// Boomerang — fly out, decelerate, then return to source player.
+// ────────────────────────────────────────
+export class Boomerang {
+  constructor(scene, x, y, baseAngle, speed, dmg, range, source) {
+    this.gfx = scene.add.graphics().setDepth(14);
+    this.x = x; this.y = y;
+    this.vx = Math.cos(baseAngle) * speed;
+    this.vy = Math.sin(baseAngle) * speed;
+    this.speed = speed;
+    this.dmg = dmg;
+    this.range = range;
+    this.source = source;
+    this.hits = new Set();
+    this.life = 4.5;
+    this.phase = 'out'; // 'out' | 'return'
+    this.spin = 0;
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    this.spin += 0.45;
+    g.rotation = this.spin;
+    // Two crescent blades forming a boomerang
+    g.fillStyle(0xffaa44, 0.4);
+    g.fillCircle(0, 0, 12); // glow
+    g.fillStyle(0x886020, 1);
+    g.fillTriangle(-12, -2, 0, 4, -2, 2);
+    g.fillTriangle(12, -2, 0, 4, 2, 2);
+    g.fillStyle(0xffd966, 1);
+    g.fillTriangle(-10, -1.5, -2, 1, -3, 1.5);
+    g.fillTriangle(10, -1.5, 2, 1, 3, 1.5);
+    g.fillStyle(0xfff066, 0.85);
+    g.fillCircle(0, 0, 2);
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
+// IceRing — expanding circular wave that damages and freezes enemies.
+// ────────────────────────────────────────
+export class IceRing {
+  constructor(scene, x, y, maxRadius, dmg, freezeDur, source) {
+    this.gfx = scene.add.graphics().setDepth(11);
+    this.x = x; this.y = y;
+    this.r = 12;
+    this.maxRadius = maxRadius;
+    this.dmg = dmg;
+    this.freezeDur = freezeDur;
+    this.source = source;
+    this.hits = new Set();
+    this.life = 0.55; // total lifetime
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    const a = Math.max(0, this.life / 0.55);
+    g.fillStyle(0x88ccff, a * 0.18);
+    g.fillCircle(0, 0, this.r);
+    g.lineStyle(3, 0xc8e8ff, a * 0.95);
+    g.strokeCircle(0, 0, this.r);
+    g.lineStyle(1.5, 0xffffff, a * 0.7);
+    g.strokeCircle(0, 0, Math.max(2, this.r - 4));
+    // ice shards radiating
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2;
+      const cx = Math.cos(ang) * this.r, cy = Math.sin(ang) * this.r;
+      g.fillStyle(0xe0f5ff, a * 0.85);
+      g.fillTriangle(cx - 1.5, cy, cx + 1.5, cy, cx + Math.cos(ang) * 3, cy + Math.sin(ang) * 3);
+    }
   }
   destroy() { this.gfx.destroy(); }
 }

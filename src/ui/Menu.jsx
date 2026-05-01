@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { SKILLS, MODES } from '../game/data.js';
+import { SKILLS, MODES, BIOMES, BIOME_LIST } from '../game/data.js';
 import { CHARACTERS, CHARACTER_LIST } from '../game/characters.js';
 import { getDailyConfig, loadDailyState } from '../game/daily.js';
 import { MenuBg } from './SceneBg.jsx';
@@ -8,9 +8,9 @@ import { useT, getLang, setLang } from '../i18n.js';
 import { playSfx } from '../game/audio.js';
 
 // Starter weapons : utility powers like 'gather' are excluded — they can't kill on their own.
-const WEAPONS = ['dagger', 'sword', 'whip', 'missile', 'floating', 'grenade', 'flamethrower', 'cloud', 'nova', 'lightning', 'chargedBolt', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
+const WEAPONS = ['dagger', 'sword', 'whip', 'bow', 'boomerang', 'missile', 'floating', 'grenade', 'flamethrower', 'cloud', 'nova', 'lightning', 'chargedBolt', 'iceRing', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
 
-export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, character, onCharacterChange, uiScale, setUiScale, onOpenGuide, onOpenShop }) {
+export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, character, onCharacterChange, biome, onBiomeChange, uiScale, setUiScale, onOpenGuide, onOpenShop }) {
   const t = useT();
   const lang = getLang();
   const pickWeapon = id => { if (id !== weapon) playSfx('uimove'); onWeaponChange(id); };
@@ -138,6 +138,40 @@ export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mo
                 {CHARACTERS[character].desc}
               </div>
             )}
+          </div>
+        )}
+
+        {onBiomeChange && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ color: '#c77dff', fontSize: '0.91em', letterSpacing: 4, marginBottom: 10 }}>{t('menu.biome') || 'BIOME'}</div>
+            <div style={{ display: 'flex', gap: '0.4em', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {BIOME_LIST.map(id => {
+                const b = BIOMES[id];
+                const active = biome === id;
+                const accentHex = `#${b.accent.toString(16).padStart(6, '0')}`;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => { if (id !== biome) playSfx('uimove'); onBiomeChange(id); }}
+                    onMouseDown={e => e.preventDefault()}
+                    tabIndex={-1}
+                    style={{
+                      padding: '0.45em 0.75em',
+                      background: active ? `${accentHex}33` : 'rgba(8,0,22,0.6)',
+                      border: `1px solid ${active ? accentHex : '#4a1d6a'}`,
+                      color: active ? accentHex : '#9d4edd',
+                      fontFamily: "'Cinzel',serif", fontSize: '0.85em', letterSpacing: 1,
+                      cursor: 'pointer', borderRadius: 4,
+                      boxShadow: active ? `0 0 14px ${accentHex}55` : 'none',
+                      display: 'flex', alignItems: 'center', gap: '0.3em',
+                    }}
+                  >
+                    <span style={{ fontSize: '1.2em' }}>{b.icon}</span>
+                    <span>{b.name}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 

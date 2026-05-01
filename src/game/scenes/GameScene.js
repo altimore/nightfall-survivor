@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GOAL_TIME } from '../config.js';
-import { Player, Enemy, Projectile, EnemyProjectile, ChargedBolt, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest, Obstacle, CONTROLLER_SOLO, CONTROLLER_P1, CONTROLLER_P2, CONTROLLER_P3, CONTROLLER_P4 } from '../entities.js';
-import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES, ENEMY_DROPS } from '../data.js';
+import { Player, Enemy, Projectile, EnemyProjectile, ChargedBolt, Boomerang, IceRing, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest, Obstacle, CONTROLLER_SOLO, CONTROLLER_P1, CONTROLLER_P2, CONTROLLER_P3, CONTROLLER_P4 } from '../entities.js';
+import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES, ENEMY_DROPS, BIOMES } from '../data.js';
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
 import { getOptions } from '../PhaserGame.js';
@@ -143,6 +143,8 @@ export default class GameScene extends Phaser.Scene {
     const startW2 = opts.startWeapon2 || startW;
     const num = Math.max(1, Math.min(4, opts.numPlayers || 1));
     this.mode = opts.mode || 'normal';
+    this.biomeId = opts.biome && BIOMES[opts.biome] ? opts.biome : 'cemetery';
+    this.biome = BIOMES[this.biomeId];
 
     const initPlayer = (p, weapon) => {
       p.skills = { [weapon]: 1 };
@@ -197,6 +199,8 @@ export default class GameScene extends Phaser.Scene {
     this.grenades = [];
     this.clouds = [];
     this.chargedBolts = [];
+    this.boomerangs = [];
+    this.iceRings = [];
     this.nests = [];
     this.nestSpawnT = 25;
     this.treasureT = 30 + Math.random() * 15;
@@ -723,7 +727,10 @@ export default class GameScene extends Phaser.Scene {
         if (this.elapsed >= 90) types.push('ghost');
         if (this.elapsed >= 120) types.push('knight');
         if (this.elapsed >= 150) types.push('witch');
-        this.spawnEnemy(types[Math.floor(Math.random() * types.length)]);
+        // Biome bias : 60% chance to favor unlocked biome enemies
+        const favored = (this.biome?.favored || []).filter(t => types.includes(t));
+        const pool = (favored.length > 0 && Math.random() < 0.6) ? favored : types;
+        this.spawnEnemy(pool[Math.floor(Math.random() * pool.length)]);
       }
     }
 
@@ -815,6 +822,8 @@ export default class GameScene extends Phaser.Scene {
 
     // Charged bolts: shared list (each bolt remembers its source player)
     this.updateChargedBolts(dt);
+    this.updateBoomerangs(dt);
+    this.updateIceRings(dt);
 
     // Treasure: occasional fast streak across the screen
     this.treasureT -= dt;
@@ -1038,6 +1047,8 @@ export default class GameScene extends Phaser.Scene {
     for (const gr of this.grenades) gr.redraw();
     for (const c of this.clouds) c.redraw();
     for (const cb of this.chargedBolts) cb.redraw();
+    for (const bm of this.boomerangs) bm.redraw();
+    for (const ir of this.iceRings) ir.redraw();
     for (const ep of this.eprojectiles) ep.redraw();
     for (const o of this.orbs) o.redraw();
     this.drawOrbits(p);
@@ -1755,6 +1766,75 @@ export default class GameScene extends Phaser.Scene {
         playSfx('lightning');
       }
     }
+
+    // ── Bow — high-damage piercing arrow toward farthest enemy
+    const blv = slv(p, 'bow');
+    if (blv > 0) {
+      p.weaponT.bow = (p.weaponT.bow || 0) - dt;
+      if (p.weaponT.bow <= 0 && this.enemies.length > 0) {
+        p.weaponT.bow = blv >= 4 ? 0.7 : blv >= 2 ? 1.0 : 1.5;
+        const count = blv >= 5 ? 3 : blv >= 3 ? 2 : 1;
+        const dmg = (40 + blv * 15) * p.dmgM * dmgBoost * (blv >= 4 ? 1.3 : 1);
+        let near = null, nd = Infinity;
+        for (const e of this.enemies) {
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          if (d < nd) { nd = d; near = e; }
+        }
+        if (near) {
+          const base = Math.atan2(near.y - p.y, near.x - p.x);
+          for (let i = 0; i < count; i++) {
+            const ang = base + (i - (count - 1) / 2) * 0.18;
+            const proj = new Projectile(this, p.x, p.y, Math.cos(ang) * 540, Math.sin(ang) * 540, dmg, true);
+            this.projectiles.push(proj);
+          }
+          playSfx('dagger');
+        }
+      }
+    }
+
+    // ── Boomerang — out-and-return spinning blade
+    const bmlv = slv(p, 'boomerang');
+    if (bmlv > 0) {
+      p.weaponT.boomerang = (p.weaponT.boomerang || 0) - dt;
+      if (p.weaponT.boomerang <= 0) {
+        p.weaponT.boomerang = bmlv >= 3 ? 1.5 : 2.0;
+        const count = bmlv >= 5 ? 4 : bmlv >= 4 ? 3 : bmlv >= 2 ? 2 : 1;
+        const range = (160 + bmlv * 25) * (bmlv >= 4 ? 1.3 : 1);
+        const dmg = (18 + bmlv * 8) * p.dmgM * dmgBoost * (bmlv >= 3 ? 1.3 : 1);
+        // Aim at nearest enemy; fan out for multi
+        let near = null, nd = Infinity;
+        for (const e of this.enemies) {
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          if (d < nd) { nd = d; near = e; }
+        }
+        const base = near ? Math.atan2(near.y - p.y, near.x - p.x) : 0;
+        for (let i = 0; i < count; i++) {
+          const ang = base + (i / count) * Math.PI * 2;
+          this.boomerangs.push(new Boomerang(this, p.x, p.y, ang, 320, dmg, range, p));
+        }
+        playSfx('dagger');
+      }
+    }
+
+    // ── IceRing — expanding frost wave
+    const ilv = slv(p, 'iceRing');
+    if (ilv > 0) {
+      p.weaponT.iceRing = (p.weaponT.iceRing || 0) - dt;
+      if (p.weaponT.iceRing <= 0) {
+        p.weaponT.iceRing = ilv >= 3 ? 2.3 : 3.0;
+        const r = (90 + ilv * 22) * (ilv >= 2 ? 1.25 : 1);
+        const dmg = (15 + ilv * 8) * p.dmgM * dmgBoost * (ilv >= 5 ? 1.5 : 1);
+        const freezeDur = ilv >= 5 ? 2 : ilv >= 2 ? 1.4 : 1;
+        const pulses = ilv >= 5 ? 3 : ilv >= 4 ? 2 : 1;
+        for (let k = 0; k < pulses; k++) {
+          this.time.delayedCall(k * 220, () => {
+            if (this.over) return;
+            this.iceRings.push(new IceRing(this, p.x, p.y, r, dmg, freezeDur, p));
+          });
+        }
+        playSfx('nova');
+      }
+    }
   }
 
   updateChargedBolts(dt) {
@@ -1821,6 +1901,94 @@ export default class GameScene extends Phaser.Scene {
     }
     this.chargedBolts = this.chargedBolts.filter(b => {
       if (!b.alive) { b.destroy(); return false; }
+      return true;
+    });
+  }
+
+  updateBoomerangs(dt) {
+    if (!this.boomerangs || this.boomerangs.length === 0) return;
+    for (const b of this.boomerangs) {
+      // Switch to return phase once we've travelled past the range.
+      if (b.phase === 'out') {
+        const dToSrc = Math.hypot(b.x - b.source.x, b.y - b.source.y);
+        if (dToSrc >= b.range) {
+          b.phase = 'return';
+          b.hits.clear(); // allow re-hitting on the way back
+        }
+      } else {
+        // Steer toward source
+        const dx = b.source.x - b.x, dy = b.source.y - b.y;
+        const d = Math.hypot(dx, dy);
+        if (d < 18) { b.alive = false; continue; }
+        const ang = Math.atan2(dy, dx);
+        b.vx = Math.cos(ang) * b.speed;
+        b.vy = Math.sin(ang) * b.speed;
+      }
+      // Slight deceleration on the way out for the throw arc feel
+      if (b.phase === 'out') {
+        b.vx *= 0.985;
+        b.vy *= 0.985;
+      }
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      b.life -= dt;
+      if (b.life <= 0) b.alive = false;
+      // Collisions: enemies (per-pass)
+      for (const e of this.enemies) {
+        if (b.hits.has(e)) continue;
+        if (Math.hypot(e.x - b.x, e.y - b.y) < e.size + 10) {
+          this.dmgTo(e, b.dmg, 'physical', 'boomerang', b.source);
+          b.hits.add(e);
+        }
+      }
+      // Nests
+      for (const n of this.nests) {
+        if (b.hits.has(n)) continue;
+        if (Math.hypot(n.x - b.x, n.y - b.y) < n.size + 10) {
+          n.hp -= b.dmg;
+          this.fxDamage(n.x, n.y, b.dmg, false);
+          if (this.damageStats) this.damageStats.boomerang = (this.damageStats.boomerang || 0) + b.dmg;
+          b.hits.add(n);
+        }
+      }
+    }
+    this.boomerangs = this.boomerangs.filter(b => {
+      if (!b.alive) { b.destroy(); return false; }
+      return true;
+    });
+  }
+
+  updateIceRings(dt) {
+    if (!this.iceRings || this.iceRings.length === 0) return;
+    for (const r of this.iceRings) {
+      // Expand the radius linearly to maxRadius over its life
+      const progress = 1 - (r.life / 0.55);
+      r.r = 12 + (r.maxRadius - 12) * progress;
+      r.life -= dt;
+      if (r.life <= 0) r.alive = false;
+      // Damage + freeze enemies inside the band [r.r-12, r.r+4]
+      for (const e of this.enemies) {
+        if (r.hits.has(e)) continue;
+        const d = Math.hypot(e.x - r.x, e.y - r.y);
+        if (d > r.r - 14 && d < r.r + 6) {
+          this.dmgTo(e, r.dmg, 'ice', 'iceRing', r.source);
+          if (e.statuses) e.statuses.frozen = { duration: r.freezeDur };
+          r.hits.add(e);
+        }
+      }
+      for (const n of this.nests) {
+        if (r.hits.has(n)) continue;
+        const d = Math.hypot(n.x - r.x, n.y - r.y);
+        if (d > r.r - 14 && d < r.r + 6) {
+          n.hp -= r.dmg;
+          this.fxDamage(n.x, n.y, r.dmg, false);
+          if (this.damageStats) this.damageStats.iceRing = (this.damageStats.iceRing || 0) + r.dmg;
+          r.hits.add(n);
+        }
+      }
+    }
+    this.iceRings = this.iceRings.filter(r => {
+      if (!r.alive) { r.destroy(); return false; }
       return true;
     });
   }
@@ -3230,9 +3398,10 @@ export default class GameScene extends Phaser.Scene {
     const g = this.bgGfx;
     g.clear();
     const t = this.elapsed;
+    const biome = this.biome || BIOMES.cemetery;
 
-    // Hex grid — fixed in world space (no parallax to avoid the floor-glide illusion)
-    g.lineStyle(1, 0x3c005f, 0.10);
+    // Hex grid — biome-themed colour
+    g.lineStyle(1, biome.gridColor, 0.10);
     for (let x = 0; x < this.W + 80; x += 80) {
       for (let y = 0; y < this.H + 70; y += 70) {
         g.beginPath();
@@ -3249,8 +3418,8 @@ export default class GameScene extends Phaser.Scene {
     // Decorations (fixed positions, generated once per scene/resize)
     for (const d of this.decorations) drawDecor(g, d.x, d.y, d.type, d.hash);
 
-    // Mist — animated (movement is intentional, slow ambient drift)
-    g.fillStyle(0x4a0a80, 0.07);
+    // Mist — animated (movement is intentional, slow ambient drift), biome-tinted
+    g.fillStyle(biome.accent, 0.07);
     for (let i = 0; i < 5; i++) {
       const fx = (this.W * 0.5) + Math.cos(t * 0.05 + i * 1.7) * (this.W * 0.45);
       const fy = (this.H * 0.5) + Math.sin(t * 0.04 + i * 2.3) * (this.H * 0.45);
