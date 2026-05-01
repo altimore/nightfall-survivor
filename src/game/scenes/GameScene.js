@@ -707,6 +707,33 @@ export default class GameScene extends Phaser.Scene {
       p.hp = Math.min(p.maxHp, p.hp + 80);
     } else if (type === 'magnet') {
       for (const o of this.orbs) { o.x = p.x; o.y = p.y; }
+    } else if (type === 'nuke') {
+      // Wipe all on-screen enemies (excluding bosses → reduce them by 40 % HP).
+      for (const e of this.enemies) {
+        if (e.charmed) continue;
+        if (e.type === 'boss') {
+          e.takeDamage(e.maxHp * 0.4, 'holy', this);
+        } else {
+          e.takeDamage(99999, 'holy', this);
+        }
+      }
+      this.fxNova(p.x, p.y, Math.max(this.W, this.H));
+      this.shake(0.012, 320);
+      playSfx('boss');
+    } else if (type === 'vacuum') {
+      // Collect every XP orb instantly.
+      for (const o of this.orbs) {
+        p.xp += o.value;
+        o.life = -1;
+      }
+      playSfx('xp');
+      while (p.xp >= xpFor(p.level)) {
+        p.xp -= xpFor(p.level);
+        p.level++;
+        p.hp = Math.min(p.maxHp, p.hp + 15);
+        playSfx('levelup');
+        this.onLevelUp(p);
+      }
     } else {
       const dur = ITEM_DURATIONS[type];
       this.buffs[type] = (this.buffs[type] || 0) + dur;
@@ -861,8 +888,8 @@ export default class GameScene extends Phaser.Scene {
         e.shootTimer = (e.shootTimer ?? 2) - dt;
         if (e.shootTimer <= 0) {
           e.shootCount = (e.shootCount || 0) + 1;
-          const pattern = e.shootCount % 4;
-          e.shootTimer = pattern === 1 ? 2.6 : pattern === 2 ? 1.8 : 2.8;
+          const pattern = e.shootCount % 6;
+          e.shootTimer = pattern === 1 || pattern === 4 ? 2.8 : pattern === 2 || pattern === 5 ? 1.7 : 2.5;
           this.fireBossPattern(e, p, pattern);
           playSfx('eprojshoot');
         }
@@ -1828,6 +1855,38 @@ export default class GameScene extends Phaser.Scene {
           const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
           this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 1.25, Math.sin(a) * speed * 1.25, dmg * 0.85, 0xff4400, r));
         }
+        break;
+      }
+      case 4: { // expanding ring — slow then fast wave
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.55, Math.sin(a) * speed * 0.55, dmg * 0.7, 0xff8844, r));
+        }
+        this.time.delayedCall(650, () => {
+          if (e.hp <= 0) return;
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2 + Math.PI / 12;
+            this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.95, Math.sin(a) * speed * 0.95, dmg * 0.7, 0xff5566, r));
+          }
+        });
+        break;
+      }
+      case 5: { // strafe burst — 3 fast tight shots toward player
+        const baseA = Math.atan2(p.y - e.y, p.x - e.x);
+        for (let i = -1; i <= 1; i++) {
+          const a = baseA + i * 0.08;
+          const sp = speed * 1.45;
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp, dmg * 1.1, 0xff0066, r + 1));
+        }
+        // follow-up burst
+        this.time.delayedCall(180, () => {
+          if (e.hp <= 0) return;
+          const baseA2 = Math.atan2(p.y - e.y, p.x - e.x);
+          for (let i = -1; i <= 1; i++) {
+            const a = baseA2 + i * 0.12;
+            this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 1.3, Math.sin(a) * speed * 1.3, dmg * 0.9, 0xff0066, r));
+          }
+        });
         break;
       }
     }

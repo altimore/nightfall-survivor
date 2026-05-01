@@ -103,8 +103,10 @@ export const ITEMS = {
   freeze:    { name:'Cristal glacé',    icon:'❄️', col:'#88ddff', colNum:0x88ddff, desc:'Ennemis -70% vitesse · 6s'},
   speed:     { name:'Bottes ailées',    icon:'💨', col:'#ffe066', colNum:0xffe066, desc:'Vitesse ×2 · 8s'          },
   magnet:    { name:'Aimant arcane',    icon:'🌀', col:'#ffb347', colNum:0xffb347, desc:'Attire tous les XP orbes' },
+  nuke:      { name:'Sceau du Néant',    icon:'☢️', col:'#ff4400', colNum:0xff4400, desc:'Tue tous les ennemis à l\'écran' },
+  vacuum:    { name:'Aspiration arcane', icon:'🌟', col:'#88ddff', colNum:0x88ddff, desc:'Ramasse toutes les orbes XP' },
 };
-export const ITEM_DURATIONS = { heal:0, megaheal:0, regen:6, rage:8, damageBuff:10, shield:5, freeze:6, speed:8, magnet:0 };
+export const ITEM_DURATIONS = { heal:0, megaheal:0, regen:6, rage:8, damageBuff:10, shield:5, freeze:6, speed:8, magnet:0, nuke:0, vacuum:0 };
 export const ITEM_KEYS = Object.keys(ITEMS);
 
 // ════════════════════════════════════════
