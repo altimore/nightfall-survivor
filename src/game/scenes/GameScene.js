@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GOAL_TIME } from '../config.js';
-import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest } from '../entities.js';
+import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest, Obstacle } from '../entities.js';
 import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES } from '../data.js';
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
@@ -159,6 +159,7 @@ export default class GameScene extends Phaser.Scene {
     this.cloudT = 0;
     this.nests = [];
     this.nestSpawnT = 25;
+    this.obstacles = [];
     this.orbitAngle = 0;
     this.orbitHits = new Map();
     this.trail = [];
@@ -200,6 +201,9 @@ export default class GameScene extends Phaser.Scene {
       if (this.paused) stopMusic();
       else if (!this.over) startMusic(this.bossMusicOn ? 'boss' : 'normal');
     });
+
+    // Initial obstacles scattered on the map
+    for (let i = 0; i < 7; i++) this.spawnObstacle();
 
     initAudio();
     startMusic();
@@ -256,6 +260,16 @@ export default class GameScene extends Phaser.Scene {
     let dmgMul = 1 + tier * 0.1;
     if (this.mode === 'horde') hpMul *= 0.6;
     this.enemies.push(new Enemy(this, x, y, typeName, hpMul, 1, dmgMul));
+  }
+
+  spawnObstacle() {
+    let x, y, tries = 0;
+    do {
+      x = 80 + Math.random() * (this.W - 160);
+      y = 80 + Math.random() * (this.H - 160);
+      tries++;
+    } while (Math.hypot(x - this.player.x, y - this.player.y) < 140 && tries < 12);
+    this.obstacles.push(new Obstacle(this, x, y));
   }
 
   spawnItem() {
@@ -566,6 +580,16 @@ export default class GameScene extends Phaser.Scene {
           }
         }
       }
+      // and obstacles (always blocked, even pierce)
+      if (proj.alive) {
+        for (const o of this.obstacles) {
+          if (Math.hypot(proj.x - o.x, proj.y - o.y) < o.size + 5) {
+            o.hp -= proj.dmg;
+            proj.alive = false;
+            break;
+          }
+        }
+      }
     }
 
     // ── Enemy projectiles
@@ -583,6 +607,16 @@ export default class GameScene extends Phaser.Scene {
         playSfx('hit');
         ep.alive = false;
       }
+      // obstacles block enemy projectiles too
+      if (ep.alive) {
+        for (const o of this.obstacles) {
+          if (Math.hypot(ep.x - o.x, ep.y - o.y) < o.size + 5) {
+            o.hp -= ep.dmg * 0.6;
+            ep.alive = false;
+            break;
+          }
+        }
+      }
     }
 
     // ── XP orbs
@@ -596,6 +630,15 @@ export default class GameScene extends Phaser.Scene {
     this.eprojectiles = this.eprojectiles.filter(ep => {
       if (!ep.alive) ep.destroy();
       return ep.alive;
+    });
+    this.obstacles = this.obstacles.filter(o => {
+      if (o.hp <= 0) {
+        this.fxNova(o.x, o.y, 22);
+        playSfx('death');
+        o.destroy();
+        return false;
+      }
+      return true;
     });
     this.enemies = this.enemies.filter(e => {
       if (e.hp <= 0) {
@@ -634,6 +677,7 @@ export default class GameScene extends Phaser.Scene {
     for (const t of this.trail) t.redraw();
     for (const tr of this.traps) tr.redraw();
     for (const n of this.nests) n.redraw();
+    for (const o of this.obstacles) o.redraw();
     for (const tu of this.turrets) tu.redraw();
     p.redraw();
     for (const it of this.items) it.redraw();
@@ -943,26 +987,42 @@ export default class GameScene extends Phaser.Scene {
     }
 
     const fllv = slv(p, 'flamethrower');
-    if (fllv > 0 && this.enemies.length > 0) {
-      this.weaponT.flamethrower = (this.weaponT.flamethrower || 0) - dt;
-      if (this.weaponT.flamethrower <= 0) {
-        this.weaponT.flamethrower = 0.15;
-        const range = fllv >= 3 ? 180 : 150;
-        const arcDeg = fllv >= 4 ? 100 : fllv >= 2 ? 80 : 60;
-        const arc = arcDeg * Math.PI / 180;
-        const dmg = (8 + (fllv >= 3 ? 4 : 0)) * p.dmgM * dmgBoost * (fllv >= 4 ? 1.3 : 1);
-        let near = null, nd = Infinity;
-        for (const e of this.enemies) {
-          if (e.charmed) continue;
-          const d = Math.hypot(e.x - p.x, e.y - p.y);
-          if (d < nd) { nd = d; near = e; }
+    if (fllv > 0) {
+      const burstDur = fllv >= 5 ? 3.0 : 2.5;
+      const cd = fllv >= 5 ? 3.5 : fllv >= 3 ? 4 : 5;
+      this.flameCD = (this.flameCD || 0) - dt;
+      if (this.flameActive) {
+        this.flameDur -= dt;
+        if (this.flameDur <= 0) {
+          this.flameActive = false;
+          this.flameCD = cd;
+        } else {
+          this.weaponT.flamethrower = (this.weaponT.flamethrower || 0) - dt;
+          if (this.weaponT.flamethrower <= 0) {
+            this.weaponT.flamethrower = 0.1;
+            const range = fllv >= 3 ? 180 : 150;
+            const arcDeg = fllv >= 4 ? 100 : fllv >= 2 ? 80 : 60;
+            const arc = arcDeg * Math.PI / 180;
+            const dmg = (7 + (fllv >= 3 ? 3 : 0)) * p.dmgM * dmgBoost * (fllv >= 4 ? 1.3 : 1);
+            let near = null, nd = Infinity;
+            for (const e of this.enemies) {
+              if (e.charmed) continue;
+              const d = Math.hypot(e.x - p.x, e.y - p.y);
+              if (d < nd) { nd = d; near = e; }
+            }
+            const baseAngle = near ? Math.atan2(near.y - p.y, near.x - p.x) : (this._lastFlameAngle ?? 0);
+            this._lastFlameAngle = baseAngle;
+            const angles = fllv >= 5 ? [baseAngle, baseAngle + Math.PI] : [baseAngle];
+            for (const a of angles) {
+              this.applyFlamethrower(p, a, arc, range, dmg);
+              this.fxFlame(p.x, p.y, a, arc, range);
+            }
+          }
         }
-        const baseAngle = near ? Math.atan2(near.y - p.y, near.x - p.x) : 0;
-        const angles = fllv >= 5 ? [baseAngle, baseAngle + Math.PI] : [baseAngle];
-        for (const a of angles) {
-          this.applyFlamethrower(p, a, arc, range, dmg);
-          this.fxFlame(p.x, p.y, a, arc, range);
-        }
+      } else if (this.flameCD <= 0 && this.enemies.length > 0) {
+        this.flameActive = true;
+        this.flameDur = burstDur;
+        playSfx('nova');
       }
     }
 
@@ -1272,14 +1332,14 @@ export default class GameScene extends Phaser.Scene {
     }
     const xpBoost = lvl >= 4 ? 1.5 : 1;
     for (const g of this.gatherers) {
+      // Sequential pickup: nearest non-collected orb, no cross-gatherer locking.
       let target = null, td = Infinity;
       for (const o of this.orbs) {
-        if (o.tagged) continue;
+        if (o.life <= 0) continue;
         const d = Math.hypot(o.x - g.x, o.y - g.y);
         if (d < td) { td = d; target = o; }
       }
       if (target) {
-        target.tagged = g;
         const dx = target.x - g.x, dy = target.y - g.y;
         const dist = Math.hypot(dx, dy) || 1;
         g.vx = (dx / dist) * g.speed;
@@ -1287,7 +1347,7 @@ export default class GameScene extends Phaser.Scene {
         g.x += g.vx * dt;
         g.y += g.vy * dt;
         if (Math.hypot(g.x - target.x, g.y - target.y) < g.size + 14) {
-          // pickup directly: grant boosted XP and mark orb for removal
+          // collect: grant boosted XP and flag orb for removal
           p.xp += Math.ceil(target.value * xpBoost);
           playSfx('xp');
           if (p.xp >= xpFor(p.level)) {
@@ -1297,10 +1357,10 @@ export default class GameScene extends Phaser.Scene {
             playSfx('levelup');
             this.onLevelUp(p);
           }
-          target.life = -1; // updateOrbs will filter this out
-          target.tagged = null;
+          target.life = -1;
         }
       } else {
+        // No orbs around — drift back near the player.
         const dx = p.x - g.x, dy = p.y - g.y;
         const d = Math.hypot(dx, dy) || 1;
         if (d > 70) {
@@ -1312,10 +1372,6 @@ export default class GameScene extends Phaser.Scene {
         g.x += g.vx * dt;
         g.y += g.vy * dt;
       }
-    }
-    // clean up orbs that no longer exist (orb was collected) — clear `tagged`
-    for (const g of this.gatherers) {
-      // nothing per-gatherer
     }
   }
 
@@ -1797,33 +1853,41 @@ export default class GameScene extends Phaser.Scene {
   }
 
   fxFlame(x, y, angle, arc, range) {
-    const g = this.add.graphics().setDepth(13);
-    g.x = x; g.y = y;
-    const start = angle - arc / 2;
-    const end = angle + arc / 2;
-    g.fillStyle(0xff3300, 0.25);
-    g.beginPath();
-    g.moveTo(0, 0);
-    g.arc(0, 0, range, start, end, false);
-    g.closePath();
-    g.fillPath();
-    g.fillStyle(0xff8844, 0.45);
-    g.beginPath();
-    g.moveTo(0, 0);
-    g.arc(0, 0, range * 0.7, start + arc * 0.1, end - arc * 0.1, false);
-    g.closePath();
-    g.fillPath();
-    g.fillStyle(0xffe066, 0.55);
-    g.beginPath();
-    g.moveTo(0, 0);
-    g.arc(0, 0, range * 0.4, start + arc * 0.2, end - arc * 0.2, false);
-    g.closePath();
-    g.fillPath();
-    this.tweens.add({
-      targets: g, alpha: 0,
-      duration: 180,
-      onComplete: () => g.destroy(),
-    });
+    // Spawn ~10 flame particles spread along the cone, each one a small blob
+    // that drifts outward, scales down and fades out → looks like fire.
+    const count = 10;
+    for (let i = 0; i < count; i++) {
+      const a = angle + (Math.random() - 0.5) * arc;
+      const dist0 = 18 + Math.random() * 30;
+      const startX = x + Math.cos(a) * dist0;
+      const startY = y + Math.sin(a) * dist0;
+      const dist1 = dist0 + 60 + Math.random() * (range * 0.7);
+      const endX = x + Math.cos(a) * dist1;
+      const endY = y + Math.sin(a) * dist1;
+      const part = this.add.graphics().setDepth(13);
+      // layered flame: bright core + orange middle + dark red outer
+      part.fillStyle(0x4a0000, 0.6);
+      part.fillCircle(0, 0, 9);
+      part.fillStyle(0xff3300, 0.85);
+      part.fillCircle(0, 0, 7);
+      part.fillStyle(0xff8844, 0.95);
+      part.fillCircle(0, 0, 5);
+      part.fillStyle(0xffe066, 1);
+      part.fillCircle(-1, -1, 3);
+      part.x = startX; part.y = startY;
+      part.scaleX = 0.6 + Math.random() * 0.5;
+      part.scaleY = part.scaleX;
+      this.tweens.add({
+        targets: part,
+        x: endX, y: endY,
+        scaleX: 0.2 + Math.random() * 0.2,
+        scaleY: 0.2 + Math.random() * 0.2,
+        alpha: 0,
+        duration: 280 + Math.random() * 120,
+        ease: 'Quad.out',
+        onComplete: () => part.destroy(),
+      });
+    }
   }
 
   updateClouds(dt, p, dmgBoost) {
@@ -1842,36 +1906,52 @@ export default class GameScene extends Phaser.Scene {
         c.x += dx / d * 60 * dt;
         c.y += dy / d * 60 * dt;
       }
-      // fire
+      // strike: AoE under the cloud
       c.fireT -= dt;
-      if (c.fireT <= 0 && this.enemies.length > 0) {
+      if (c.fireT <= 0) {
         c.fireT = interval;
-        const candidates = this.enemies.filter(e => !e.charmed);
-        if (candidates.length > 0) {
-          const target = candidates[Math.floor(Math.random() * candidates.length)];
-          target.takeDamage(dmg, 'lightning', this);
-          if (p.ls > 0) p.hp = Math.min(p.maxHp, p.hp + dmg * p.ls);
-          this.fxBolt(c.x, c.y, target.x, target.y);
-          // chain on lvl 5
-          if (lvl >= 5) {
-            let prev = target;
-            for (let i = 0; i < 2; i++) {
-              const pool = this.enemies.filter(e => !e.charmed && e !== prev);
-              if (!pool.length) break;
-              let near = null, nd = Infinity;
-              for (const e of pool) {
-                const d2 = Math.hypot(e.x - prev.x, e.y - prev.y);
-                if (d2 < nd) { nd = d2; near = e; }
-              }
-              if (!near || nd > 200) break;
-              near.takeDamage(dmg * 0.7, 'lightning', this);
-              this.fxBolt(prev.x, prev.y, near.x, near.y);
-              prev = near;
-            }
+        const radius = lvl >= 5 ? 100 : lvl >= 3 ? 80 : 60;
+        let anyHit = false;
+        for (const e of this.enemies) {
+          if (e.charmed) continue;
+          if (Math.hypot(e.x - c.x, e.y - c.y) < radius + e.size) {
+            e.takeDamage(dmg, 'lightning', this);
+            if (p.ls > 0) p.hp = Math.min(p.maxHp, p.hp + dmg * p.ls);
+            anyHit = true;
           }
         }
+        if (anyHit || Math.random() < 0.5) this.fxCloudStrike(c.x, c.y, radius);
       }
       return true;
+    });
+  }
+
+  fxCloudStrike(x, y, radius) {
+    const g = this.add.graphics().setDepth(13);
+    // jagged vertical bolt from cloud to ground
+    g.lineStyle(3, 0xffffff, 1);
+    g.beginPath();
+    g.moveTo(x, y);
+    let cx = x, cy = y;
+    for (let i = 0; i < 5; i++) {
+      cy += 6 + Math.random() * 8;
+      cx += (Math.random() - 0.5) * 14;
+      g.lineTo(cx, cy);
+    }
+    g.strokePath();
+    g.lineStyle(1.5, 0xffe066, 0.9);
+    g.beginPath();
+    g.moveTo(x, y); g.lineTo(cx, cy);
+    g.strokePath();
+    // impact ring on the ground
+    g.lineStyle(2, 0xffe066, 0.95);
+    g.strokeCircle(cx, cy, radius);
+    g.fillStyle(0xffe066, 0.16);
+    g.fillCircle(cx, cy, radius);
+    this.tweens.add({
+      targets: g, alpha: 0,
+      duration: 220,
+      onComplete: () => g.destroy(),
     });
   }
 

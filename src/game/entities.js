@@ -620,6 +620,52 @@ export class TrailTile {
 }
 
 // ────────────────────────────────────────
+// Destructible obstacle — blocks projectiles. Cracks accumulate as HP drops.
+// ────────────────────────────────────────
+export class Obstacle {
+  constructor(scene, x, y) {
+    this.gfx = scene.add.graphics().setDepth(5);
+    this.x = x; this.y = y;
+    this.maxHp = 80;
+    this.hp = this.maxHp;
+    this.size = 22;
+    this.alive = true;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    // ground shadow
+    g.fillStyle(0x000000, 0.5);
+    g.fillEllipse(0, 8, 40, 10);
+    // rough rock cluster
+    g.fillStyle(0x2a2a35, 1);
+    g.fillCircle(-10, -2, 12);
+    g.fillCircle(9, -3, 13);
+    g.fillCircle(0, 5, 12);
+    g.fillStyle(0x4a4a55, 0.9);
+    g.fillCircle(-12, -5, 6);
+    g.fillCircle(7, -7, 5);
+    g.fillCircle(2, 2, 4);
+    // cracks deepen as HP drops
+    const cracks = Math.floor((1 - this.hp / this.maxHp) * 4);
+    g.lineStyle(1.5, 0x0a0a14, 0.85);
+    if (cracks >= 1) { g.beginPath(); g.moveTo(-9, -8); g.lineTo(-4, 4); g.strokePath(); }
+    if (cracks >= 2) { g.beginPath(); g.moveTo(8, -10); g.lineTo(4, 6); g.strokePath(); }
+    if (cracks >= 3) { g.beginPath(); g.moveTo(0, -12); g.lineTo(2, 8); g.strokePath(); }
+    if (cracks >= 4) { g.beginPath(); g.moveTo(-12, 0); g.lineTo(12, 1); g.strokePath(); }
+    // hp bar when damaged
+    if (this.hp < this.maxHp) {
+      g.fillStyle(0x220006, 0.75);
+      g.fillRect(-18, -this.size - 8, 36, 3);
+      g.fillStyle(0xffaa66, 1);
+      g.fillRect(-18, -this.size - 8, 36 * Math.max(0, this.hp / this.maxHp), 3);
+    }
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
 // Nest — stationary spawner with HP. Cave → bats, Cemetery → skeletons.
 // ────────────────────────────────────────
 export class Nest {
