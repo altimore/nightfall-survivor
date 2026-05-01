@@ -1373,6 +1373,12 @@ export default class GameScene extends Phaser.Scene {
             }
           }
         }
+        for (const n of this.nests) {
+          if (Math.hypot(n.x - p.x, n.y - p.y) < r + n.size) {
+            n.hp -= dmg;
+            this.fxDamage(n.x, n.y, dmg, false);
+          }
+        }
         this.fxNova(p.x, p.y, r);
         this.shake(0.005, 100);
         playSfx('nova');
@@ -1476,6 +1482,12 @@ export default class GameScene extends Phaser.Scene {
               const dealt = e2.takeDamage(t.dmg, 'fire', this);
               if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
               if (lvl >= 5) e2.statuses.frozen = { duration: 0.5 };
+            }
+          }
+          for (const n of this.nests) {
+            if (Math.hypot(n.x - t.x, n.y - t.y) < t.radius + n.size) {
+              n.hp -= t.dmg;
+              this.fxDamage(n.x, n.y, t.dmg, false);
             }
           }
           this.fxNova(t.x, t.y, t.radius);
@@ -1713,14 +1725,29 @@ export default class GameScene extends Phaser.Scene {
       }
       m.x += Math.cos(m.angle) * m.speed * dt;
       m.y += Math.sin(m.angle) * m.speed * dt;
+      let exploded = false;
       for (const e of this.enemies) {
         if (e.charmed) continue;
-        if (Math.hypot(m.x - e.x, m.y - e.y) < e.size + 5) {
+        if (Math.hypot(m.x - e.x, m.y - e.y) < e.size + 5) { exploded = true; break; }
+      }
+      if (!exploded) {
+        for (const n of this.nests) {
+          if (Math.hypot(m.x - n.x, m.y - n.y) < n.size + 5) { exploded = true; break; }
+        }
+      }
+      if (exploded) {
+        {
           for (const e2 of this.enemies) {
             if (e2.charmed) continue;
             if (Math.hypot(e2.x - m.x, e2.y - m.y) < m.aoe + e2.size) {
               const dealt = e2.takeDamage(m.dmg, 'fire', this);
               if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+            }
+          }
+          for (const nn of this.nests) {
+            if (Math.hypot(nn.x - m.x, nn.y - m.y) < m.aoe + nn.size) {
+              nn.hp -= m.dmg;
+              this.fxDamage(nn.x, nn.y, m.dmg, false);
             }
           }
           this.fxNova(m.x, m.y, m.aoe);
@@ -1818,6 +1845,11 @@ export default class GameScene extends Phaser.Scene {
           if (Math.hypot(g.x - e.x, g.y - e.y) < e.size + 5) { triggered = true; break; }
         }
       }
+      if (!triggered) {
+        for (const n of this.nests) {
+          if (Math.hypot(g.x - n.x, g.y - n.y) < n.size + 5) { triggered = true; break; }
+        }
+      }
       if (triggered) {
         const explode = (cx, cy) => {
           for (const e of this.enemies) {
@@ -1825,6 +1857,12 @@ export default class GameScene extends Phaser.Scene {
             if (Math.hypot(e.x - cx, e.y - cy) < g.aoe + e.size) {
               const dealt = e.takeDamage(g.dmg, 'fire', this);
               if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+            }
+          }
+          for (const n of this.nests) {
+            if (Math.hypot(n.x - cx, n.y - cy) < g.aoe + n.size) {
+              n.hp -= g.dmg;
+              this.fxDamage(n.x, n.y, g.dmg, false);
             }
           }
           this.fxNova(cx, cy, g.aoe);
@@ -1977,6 +2015,19 @@ export default class GameScene extends Phaser.Scene {
       e.vx += Math.cos(a) * 80;
       e.vy += Math.sin(a) * 80;
     }
+    for (const n of this.nests) {
+      const d = Math.hypot(n.x - p.x, n.y - p.y);
+      if (d > radius + n.size) continue;
+      if (arcDeg < 360) {
+        const ea = Math.atan2(n.y - p.y, n.x - p.x);
+        let diff = ea - baseAngle;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        if (Math.abs(diff) > arc / 2) continue;
+      }
+      n.hp -= dmg;
+      this.fxDamage(n.x, n.y, dmg, false);
+    }
   }
 
   updateCharmedAi(dt, e) {
@@ -2044,6 +2095,29 @@ export default class GameScene extends Phaser.Scene {
       x: bestO.x + (ax / al) * (bestO.size + 8),
       y: bestO.y + (ay / al) * (bestO.size + 8),
     };
+  }
+
+  // Helper: deal damage to all enemies + nests in a radius around (x, y).
+  // Returns total damage dealt (used for lifesteal).
+  damageRadius(x, y, radius, dmg, type, includeNests = true) {
+    let total = 0;
+    for (const e of this.enemies) {
+      if (e.charmed) continue;
+      if (Math.hypot(e.x - x, e.y - y) < radius + e.size) {
+        const dealt = e.takeDamage(dmg, type, this);
+        total += dealt;
+      }
+    }
+    if (includeNests) {
+      for (const n of this.nests) {
+        if (Math.hypot(n.x - x, n.y - y) < radius + n.size) {
+          n.hp -= dmg;
+          this.fxDamage(n.x, n.y, dmg, false);
+          total += dmg;
+        }
+      }
+    }
+    return total;
   }
 
   fireBossPattern(e, p, pattern) {
@@ -2146,6 +2220,19 @@ export default class GameScene extends Phaser.Scene {
       const dealt = e.takeDamage(dmg, 'fire', this);
       if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
     }
+    for (const n of this.nests) {
+      const dx = n.x - p.x, dy = n.y - p.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > range + n.size) continue;
+      if (dist < 1) continue;
+      const ea = Math.atan2(dy, dx);
+      let diff = ea - angle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      if (Math.abs(diff) > half) continue;
+      n.hp -= dmg;
+      this.fxDamage(n.x, n.y, dmg, false);
+    }
   }
 
   fxFlame(x, y, angle, arc, range) {
@@ -2216,6 +2303,13 @@ export default class GameScene extends Phaser.Scene {
             anyHit = true;
           }
         }
+        for (const n of this.nests) {
+          if (Math.hypot(n.x - c.x, n.y - c.y) < radius + n.size) {
+            n.hp -= dmg;
+            this.fxDamage(n.x, n.y, dmg, false);
+            anyHit = true;
+          }
+        }
         if (anyHit || Math.random() < 0.5) this.fxCloudStrike(c.x, c.y, radius);
       }
       return true;
@@ -2264,6 +2358,15 @@ export default class GameScene extends Phaser.Scene {
         const a = Math.atan2(e.y - p.y, e.x - p.x);
         e.vx += Math.cos(a) * 110;
         e.vy += Math.sin(a) * 110;
+      }
+    }
+    for (const n of this.nests) {
+      const dx = n.x - p.x, dy = n.y - p.y;
+      const fwd = cos * dx + sin * dy;
+      const side = -sin * dx + cos * dy;
+      if (fwd >= -n.size && fwd <= length + n.size && Math.abs(side) <= half + n.size) {
+        n.hp -= dmg;
+        this.fxDamage(n.x, n.y, dmg, false);
       }
     }
   }
