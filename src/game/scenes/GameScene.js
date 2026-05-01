@@ -868,10 +868,18 @@ export default class GameScene extends Phaser.Scene {
         break;
       }
       case 'ranged': {
-        tvx = ndx * e.speed * 0.6 * sf;
-        tvy = ndy * e.speed * 0.6 * sf;
+        const cover = this.coverPositionFor(e, p);
+        if (cover) {
+          const dx2 = cover.x - e.x, dy2 = cover.y - e.y;
+          const d2 = Math.hypot(dx2, dy2) || 1;
+          tvx = (dx2 / d2) * e.speed * 0.8 * sf;
+          tvy = (dy2 / d2) * e.speed * 0.8 * sf;
+        } else {
+          tvx = ndx * e.speed * 0.6 * sf;
+          tvy = ndy * e.speed * 0.6 * sf;
+        }
         e.shootTimer -= dt;
-        if (e.shootTimer <= 0 && dist < 260) {
+        if (e.shootTimer <= 0 && dist < 280) {
           e.shootTimer = 2.5 + Math.random() * 1.5;
           this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, ndx * 140, ndy * 140, e.dmg, 0xc8c8b0, 5));
           playSfx('eprojshoot');
@@ -879,15 +887,23 @@ export default class GameScene extends Phaser.Scene {
         break;
       }
       case 'kite': {
-        const ideal = e.kiteDist;
-        if (dist < ideal - 20) {
-          tvx = -ndx * e.speed * sf;
-          tvy = -ndy * e.speed * sf;
-        } else if (dist > ideal + 20) {
-          tvx = ndx * e.speed * 0.5 * sf;
-          tvy = ndy * e.speed * 0.5 * sf;
+        const cover = this.coverPositionFor(e, p);
+        if (cover && dist < e.kiteDist + 60) {
+          const dx2 = cover.x - e.x, dy2 = cover.y - e.y;
+          const d2 = Math.hypot(dx2, dy2) || 1;
+          tvx = (dx2 / d2) * e.speed * 0.9 * sf;
+          tvy = (dy2 / d2) * e.speed * 0.9 * sf;
         } else {
-          tvx = 0; tvy = 0; smooth = 6;
+          const ideal = e.kiteDist;
+          if (dist < ideal - 20) {
+            tvx = -ndx * e.speed * sf;
+            tvy = -ndy * e.speed * sf;
+          } else if (dist > ideal + 20) {
+            tvx = ndx * e.speed * 0.5 * sf;
+            tvy = ndy * e.speed * 0.5 * sf;
+          } else {
+            tvx = 0; tvy = 0; smooth = 6;
+          }
         }
         e.shootTimer -= dt;
         if (e.shootTimer <= 0 && dist < 300) {
@@ -1871,6 +1887,22 @@ export default class GameScene extends Phaser.Scene {
       duration: 600,
       onComplete: () => g.destroy(),
     });
+  }
+
+  coverPositionFor(e, p) {
+    let bestO = null, bestD = 200;
+    for (const o of this.obstacles) {
+      const d = Math.hypot(o.x - e.x, o.y - e.y);
+      if (d < bestD) { bestD = d; bestO = o; }
+    }
+    if (!bestO) return null;
+    // pick a point on the far side of the obstacle from the player
+    const ax = bestO.x - p.x, ay = bestO.y - p.y;
+    const al = Math.hypot(ax, ay) || 1;
+    return {
+      x: bestO.x + (ax / al) * (bestO.size + 8),
+      y: bestO.y + (ay / al) * (bestO.size + 8),
+    };
   }
 
   fireBossPattern(e, p, pattern) {
