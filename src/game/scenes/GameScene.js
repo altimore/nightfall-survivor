@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import { GOAL_TIME } from '../config.js';
-import { Player, Enemy, Projectile, EnemyProjectile, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest, Obstacle, CONTROLLER_SOLO, CONTROLLER_P1, CONTROLLER_P2 } from '../entities.js';
-import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES } from '../data.js';
+import { Player, Enemy, Projectile, EnemyProjectile, ChargedBolt, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest, Obstacle, CONTROLLER_SOLO, CONTROLLER_P1, CONTROLLER_P2, CONTROLLER_P3, CONTROLLER_P4 } from '../entities.js';
+import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES, ENEMY_DROPS } from '../data.js';
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
 import { getOptions } from '../PhaserGame.js';
+import { applyMetaToPlayer, addGold } from '../meta.js';
 
 const BOSS_NAMES = [
   "L'Émissaire des Ténèbres",
@@ -134,26 +135,37 @@ export default class GameScene extends Phaser.Scene {
     const opts = getOptions();
     const startW = opts.startWeapon || 'dagger';
     const startW2 = opts.startWeapon2 || startW;
-    const num = Math.max(1, Math.min(2, opts.numPlayers || 1));
+    const num = Math.max(1, Math.min(4, opts.numPlayers || 1));
     this.mode = opts.mode || 'normal';
 
     this.players = [];
     if (num === 1) {
       const p = new Player(this, this.W / 2, this.H / 2, 0, CONTROLLER_SOLO);
       p.skills = { [startW]: 1 };
+      applyMetaToPlayer(p);
       this.players.push(p);
     } else {
-      const p1 = new Player(this, this.W / 2 - 60, this.H / 2, 0, CONTROLLER_P1);
-      p1.skills = { [startW]: 1 };
-      const p2 = new Player(this, this.W / 2 + 60, this.H / 2, 1, CONTROLLER_P2);
-      p2.skills = { [startW2]: 1 };
-      this.players.push(p1, p2);
+      const controllers = [CONTROLLER_P1, CONTROLLER_P2, CONTROLLER_P3, CONTROLLER_P4];
+      const startWeapons = [startW, startW2, startW, startW2];
+      // Spread spawns in a small ring around center.
+      for (let i = 0; i < num; i++) {
+        const ang = (i / num) * Math.PI * 2 - Math.PI / 2;
+        const r = 70;
+        const px = this.W / 2 + Math.cos(ang) * r;
+        const py = this.H / 2 + Math.sin(ang) * r;
+        const p = new Player(this, px, py, i, controllers[i]);
+        p.skills = { [startWeapons[i]]: 1 };
+        applyMetaToPlayer(p);
+        this.players.push(p);
+      }
     }
     if (this.mode === 'oneShot') {
       for (const p of this.players) {
         p.maxHp = 1; p.hp = 1; p.dmgM = 100;
       }
     }
+    // Track gold accumulated this run (added to permanent total on game over/victory).
+    this.runGold = 0;
     this.player = this.players[0];
     this.enemies = [];
     this.projectiles = [];
@@ -169,9 +181,13 @@ export default class GameScene extends Phaser.Scene {
     this.floating = [];
     this.grenades = [];
     this.clouds = [];
+    this.chargedBolts = [];
     this.nests = [];
     this.nestSpawnT = 25;
     this.treasureT = 30 + Math.random() * 15;
+    // Damage tracking per weapon (cumulative output, not perfectly accurate but
+    // good enough to compare which build worked best).
+    this.damageStats = {};
     this.obstacles = [];
     this.trail = [];
     this.traps = [];
@@ -179,6 +195,8 @@ export default class GameScene extends Phaser.Scene {
     this.gatherers = [];
     this.turrets = [];
     this.waveIdx = 0;
+    // Dynamic difficulty: 1.0 = neutral, >1 spawn more, <1 spawn less. Adjusts based on player state.
+    this.tension = 1.0;
     this.bossWarningSent = new Set();
     this.bossMusicOn = false;
     this.bossSeen = new Set(); // enemy refs already announced
@@ -202,6 +220,9 @@ export default class GameScene extends Phaser.Scene {
     this.offRestart = bus.on('game:restart', () => this.scene.restart());
     this.offMute    = bus.on('game:mute', m => { setMuted(m); if (!m) startMusic(); });
     this.offPick    = bus.on('skill:pick', id => this.onSkillPick(id));
+    this.offReroll  = bus.on('skill:reroll', () => this.onSkillReroll());
+    this.offBanish  = bus.on('skill:banish', id => this.onSkillBanish(id));
+    this.offEndless = bus.on('endless:continue', () => this.onEndlessContinue());
     this.offPause   = bus.on('pause:set', v => {
       this.paused = !!v;
       if (this.paused) stopMusic();
@@ -218,6 +239,9 @@ export default class GameScene extends Phaser.Scene {
       this.offRestart?.();
       this.offMute?.();
       this.offPick?.();
+      this.offReroll?.();
+      this.offBanish?.();
+      this.offEndless?.();
       this.offPause?.();
       stopMusic();
     });
@@ -265,6 +289,12 @@ export default class GameScene extends Phaser.Scene {
     let hpMul = 1 + tier * 0.3;
     let dmgMul = 1 + tier * 0.1;
     if (this.mode === 'horde') hpMul *= 0.6;
+    // Endless mode multiplier — each tier of "Continue after victory" stacks on top.
+    if (this.endless) {
+      const eTier = this.endlessTier || 1;
+      hpMul *= 1 + eTier * 0.6;
+      dmgMul *= 1 + eTier * 0.3;
+    }
     const e = new Enemy(this, x, y, typeName, hpMul, 1, dmgMul);
     if (typeName === 'boss') {
       const kinds = {
@@ -322,6 +352,78 @@ export default class GameScene extends Phaser.Scene {
       tries++;
     } while (Math.hypot(x - this.player.x, y - this.player.y) < 120 && tries < 10);
     this.items.push(new Item(this, x, y, type));
+  }
+
+  // Roll the per-enemy loot table; each entry rolls independently. Drops are spawned around (x,y).
+  // Drop chance and XP burst scale with enemy xpVal (tougher enemies = better loot).
+  rollDrops(enemyType, x, y, mul = 1) {
+    const table = ENEMY_DROPS[enemyType];
+    const et = ETYPES[enemyType];
+    // Tier boost based on enemy XP value: bat(1)=0.5, zombie(3)=0.87,
+    // skeleton(4)=1, ghost(4)=1, witch(5)=1.12, knight(7)=1.32, boss(60)=3.87
+    const tierBoost = et ? Math.max(0.5, Math.sqrt(et.xpVal) / 2) : 1;
+    if (table && table.length > 0) {
+      for (const entry of table) {
+        if (Math.random() < entry.chance * mul * tierBoost) {
+          const a = Math.random() * Math.PI * 2;
+          const d = 8 + Math.random() * 18;
+          this.items.push(new Item(this, x + Math.cos(a) * d, y + Math.sin(a) * d, entry.item));
+        }
+      }
+    }
+    // Tough enemies (xpVal >= 5) sometimes burst additional XP orbs.
+    if (et && et.xpVal >= 5 && Math.random() < 0.35) {
+      const value = Math.max(1, Math.ceil(et.xpVal * 0.4));
+      const count = et.xpVal >= 10 ? 4 : 2;
+      for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = 12 + Math.random() * 16;
+        this.orbs.push(new XpOrb(this, x + Math.cos(a) * d, y + Math.sin(a) * d, value));
+      }
+    }
+  }
+
+  // Boss chest: bursts a circle of guaranteed buff items around the boss kill point.
+  dropBossChest(x, y) {
+    const goodies = ['megaheal', 'rage', 'shield', 'damageBuff'];
+    // Pick 2-3 unique items from the goodie pool
+    const pool = [...goodies];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const count = 2 + (Math.random() < 0.5 ? 1 : 0);
+    const picks = pool.slice(0, count);
+    // Add a magnet to ensure XP cleanup feel
+    picks.push('magnet');
+    const r = 36;
+    picks.forEach((id, i) => {
+      const a = (i / picks.length) * Math.PI * 2;
+      this.items.push(new Item(this, x + Math.cos(a) * r, y + Math.sin(a) * r, id));
+    });
+    this.fxNova(x, y, 70);
+  }
+
+  emitRunStats() {
+    const playersInfo = this.players.map(pl => ({
+      id: pl.id, level: pl.level, kills: pl.kills, dead: pl.dead, tint: pl.tint,
+      skills: { ...pl.skills },
+    }));
+    // Persist this run's gold to the permanent meta total.
+    const goldEarned = Math.floor(this.runGold || 0);
+    let totalGold = goldEarned;
+    if (goldEarned > 0) {
+      totalGold = addGold(goldEarned);
+    }
+    bus.emit('runStats', {
+      damageStats: { ...(this.damageStats || {}) },
+      kills: this.kills,
+      time: Math.floor(this.elapsed),
+      goal: GOAL_TIME,
+      goldEarned,
+      goldTotal: totalGold,
+      players: playersInfo,
+    });
   }
 
   emitHud() {
@@ -390,6 +492,7 @@ export default class GameScene extends Phaser.Scene {
       buffs: { ...this.buffs },
       bosses,
       cooldowns,
+      dps: Math.round(this.computeDps ? this.computeDps() : 0),
       players: playersInfo,
       stats: {
         speed: p.speed,
@@ -512,6 +615,22 @@ export default class GameScene extends Phaser.Scene {
       startMusic('normal');
     }
 
+    // ── Dynamic difficulty ─ scale spawn rate based on player state.
+    // Increase tension when player is comfortable (high HP, few enemies).
+    // Decrease tension when player is struggling (low HP, many enemies).
+    {
+      const enemyCount = this.enemies.filter(e => !e.charmed && e.type !== 'treasure').length;
+      const hpFrac = p.maxHp > 0 ? p.hp / p.maxHp : 1;
+      let target = 1.0;
+      if (hpFrac > 0.85 && enemyCount < 12) target = 1.6;       // chill → ramp up
+      else if (hpFrac > 0.7 && enemyCount < 25) target = 1.2;
+      else if (hpFrac < 0.3 || enemyCount > 60) target = 0.55;   // overwhelmed → ease off
+      else if (hpFrac < 0.5 || enemyCount > 45) target = 0.8;
+      // Smooth toward target (lerp).
+      const k = 1 - Math.exp(-0.6 * dt);
+      this.tension += (target - this.tension) * k;
+    }
+
     // ── Continuous spawn (mode-specific)
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
@@ -520,7 +639,8 @@ export default class GameScene extends Phaser.Scene {
         this.spawnEnemy('boss');
       } else {
         const baseInterval = this.mode === 'horde' ? 0.7 : 1.6;
-        this.spawnT = Math.max(0.3, baseInterval / (0.5 + this.elapsed / 90));
+        const tens = this.tension || 1;
+        this.spawnT = Math.max(0.2, (baseInterval / tens) / (0.5 + this.elapsed / 90));
         const types = ['bat'];
         if (this.elapsed >= 30) types.push('zombie');
         if (this.elapsed >= 60) types.push('skeleton');
@@ -616,6 +736,9 @@ export default class GameScene extends Phaser.Scene {
     // Nests: shared (uses any alive player for spawn-distance check)
     this.updateNests(dt, this.players.find(pl => !pl.dead) || this.players[0]);
 
+    // Charged bolts: shared list (each bolt remembers its source player)
+    this.updateChargedBolts(dt);
+
     // Treasure: occasional fast streak across the screen
     this.treasureT -= dt;
     if (this.treasureT <= 0) {
@@ -635,7 +758,7 @@ export default class GameScene extends Phaser.Scene {
       for (const e of this.enemies) {
         if (proj.pierce && proj.hits.has(e)) continue;
         if (Math.hypot(proj.x - e.x, proj.y - e.y) < e.size + 5) {
-          const dealt = e.takeDamage(proj.dmg, proj.type || 'physical', this);
+          const dealt = this.dmgTo(e, proj.dmg, proj.type || 'physical', 'dagger', p);
           if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
           if (e.type === 'boss') { this.shake(0.005, 80); this.hitstop = 0.04; }
           if (proj.pierce) proj.hits.add(e);
@@ -648,6 +771,7 @@ export default class GameScene extends Phaser.Scene {
           if (Math.hypot(proj.x - n.x, proj.y - n.y) < n.size + 5) {
             n.hp -= proj.dmg;
             this.fxDamage(n.x, n.y, proj.dmg, false);
+            if (this.damageStats) this.damageStats.dagger = (this.damageStats.dagger || 0) + proj.dmg;
             if (!proj.pierce) { proj.alive = false; break; }
           }
         }
@@ -736,19 +860,29 @@ export default class GameScene extends Phaser.Scene {
           this.fxNova(e.x, e.y, 50);
           this.shake(0.006, 120);
           playSfx('victory');
+          // Treasure drops one guaranteed item from its loot table
+          this.rollDrops(e.type, e.x, e.y, 1.0);
           // (no kill counter increment for the streak — pure loot)
         } else {
           this.kills++;
           if (p && p.id != null) p.kills = (p.kills || 0) + 1;
           playSfx(e.type === 'boss' ? 'boss' : 'death');
-          const value = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM);
+          const value = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM * (p.metaXpMul || 1));
           this.orbs.push(new XpOrb(this, e.x, e.y, value));
+          // Gold drop scales with enemy difficulty
+          const goldGain = Math.max(1, Math.ceil((e.xpVal || 1) * 0.6 * (p.metaGoldMul || 1)));
+          this.runGold += goldGain;
           if (p.kh) p.hp = Math.min(p.maxHp, p.hp + 8);
           this.fxDeath(e.x, e.y, ETYPES[e.type]?.col ?? 0xffffff);
           if (e.type === 'boss') {
             this.shake(0.012, 280);
             this.hitstop = 0.08;
             this.bossSeen.delete(e);
+            // Boss death drops a "treasure chest" — multiple loot items spread out
+            this.dropBossChest(e.x, e.y);
+          } else {
+            // Normal enemies roll their loot table
+            this.rollDrops(e.type, e.x, e.y, 1.0);
           }
         }
         e.destroy();
@@ -760,17 +894,32 @@ export default class GameScene extends Phaser.Scene {
     // ── End conditions: each player may die individually; the run ends only
     // when every player is down. Victory still triggers when the timer expires.
     for (const pl of this.players) {
-      if (!pl.dead && pl.hp <= 0) { pl.hp = 0; pl.dead = true; }
+      if (!pl.dead && pl.hp <= 0) {
+        // Meta-progression "Seconde chance" auto-revive (consumes a charge)
+        if ((pl.metaReviveLeft || 0) > 0) {
+          pl.metaReviveLeft -= 1;
+          pl.hp = Math.floor(pl.maxHp * 0.5);
+          pl.iframes = 2.5;
+          this.fxNova(pl.x, pl.y, 90);
+          this.shake(0.01, 220);
+          playSfx('victory');
+          continue;
+        }
+        pl.hp = 0; pl.dead = true;
+      }
     }
     const allDead = this.players.every(pl => pl.dead);
     if (allDead) {
       this.over = true;
       stopMusic(); playSfx('gameover');
+      this.emitRunStats();
       bus.emit('phase', 'dead');
       this.emitHud();
-    } else if (this.elapsed >= GOAL_TIME) {
+    } else if (this.elapsed >= GOAL_TIME && !this.victoryClaimed) {
+      this.victoryClaimed = true;
       this.over = true;
       stopMusic(); playSfx('victory');
+      this.emitRunStats();
       bus.emit('phase', 'victory');
       this.emitHud();
     }
@@ -792,6 +941,7 @@ export default class GameScene extends Phaser.Scene {
     for (const b of this.floating) b.redraw();
     for (const gr of this.grenades) gr.redraw();
     for (const c of this.clouds) c.redraw();
+    for (const cb of this.chargedBolts) cb.redraw();
     for (const ep of this.eprojectiles) ep.redraw();
     for (const o of this.orbs) o.redraw();
     this.drawOrbits(p);
@@ -1127,24 +1277,31 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
-  firePlayerWeapons(dt, p, dmgBoost) {
+  firePlayerWeapons(rawDt, p, dmgBoost) {
+    // Attack speed multiplier accelerates every weapon cooldown by boosting the time delta.
+    // Includes swiftness buff (×1.6) when active.
+    const swiftMul = (this.buffs?.swiftness || 0) > 0 ? 1.6 : 1;
+    const dt = rawDt * (p.atkSpdM || 1) * swiftMul;
     const dlv = slv(p, 'dagger');
+    const evoDagger = p.evolved?.has('dagger');
     if (dlv > 0) {
       p.weaponT.dagger -= dt;
       if (p.weaponT.dagger <= 0 && this.enemies.length > 0) {
-        p.weaponT.dagger = dlv >= 3 ? 0.45 : 0.8;
+        p.weaponT.dagger = (dlv >= 3 ? 0.45 : 0.8) / (evoDagger ? 1.5 : 1);
         let near = null, nd = Infinity;
         for (const e of this.enemies) {
           const d = Math.hypot(e.x - p.x, e.y - p.y);
           if (d < nd) { nd = d; near = e; }
         }
         if (near) {
-          const count = dlv >= 4 ? 3 : dlv >= 2 ? 2 : 1;
+          const baseCount = dlv >= 4 ? 3 : dlv >= 2 ? 2 : 1;
+          const count = baseCount + (evoDagger ? 3 : 0);
           const base = Math.atan2(near.y - p.y, near.x - p.x);
           const dmg = (12 + dlv * 4) * p.dmgM * dmgBoost;
+          const pierce = dlv >= 5 || evoDagger;
           for (let i = 0; i < count; i++) {
             const ang = base + (i - (count - 1) / 2) * 0.3;
-            this.projectiles.push(new Projectile(this, p.x, p.y, Math.cos(ang) * 390, Math.sin(ang) * 390, dmg, dlv >= 5));
+            this.projectiles.push(new Projectile(this, p.x, p.y, Math.cos(ang) * 390, Math.sin(ang) * 390, dmg, pierce));
           }
           playSfx('dagger');
         }
@@ -1152,11 +1309,13 @@ export default class GameScene extends Phaser.Scene {
     }
 
     const olv = slv(p, 'orbit');
+    const evoOrbit = p.evolved?.has('orbit');
     if (olv > 0) {
-      const radius = olv >= 4 ? 90 : 70;
-      const speed = olv >= 5 ? 3.0 : 2.0;
+      const radius = (olv >= 4 ? 90 : 70) + (evoOrbit ? 25 : 0);
+      const speed = (olv >= 5 ? 3.0 : 2.0) * (evoOrbit ? 1.3 : 1);
       const dmg = (10 + olv * 4) * p.dmgM * dmgBoost * (olv >= 5 ? 1.5 : olv >= 3 ? 1.2 : 1);
       const orbR = 12;
+      const orbCount = olv + (evoOrbit ? 2 : 0);
       p.orbitAngle += speed * dt;
       // tick down per-enemy hit cooldowns
       for (const [k, v] of p.orbitHits) {
@@ -1164,29 +1323,38 @@ export default class GameScene extends Phaser.Scene {
         if (nv <= 0) p.orbitHits.delete(k);
         else p.orbitHits.set(k, nv);
       }
-      for (let i = 0; i < olv; i++) {
-        const a = p.orbitAngle + (i / olv) * Math.PI * 2;
+      for (let i = 0; i < orbCount; i++) {
+        const a = p.orbitAngle + (i / orbCount) * Math.PI * 2;
         const ox = p.x + Math.cos(a) * radius;
         const oy = p.y + Math.sin(a) * radius;
         for (const e of this.enemies) {
           if (p.orbitHits.has(e)) continue;
           if (Math.hypot(e.x - ox, e.y - oy) < e.size + orbR) {
-            const dealt = e.takeDamage(dmg, 'dark', this);
-            if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+            this.dmgTo(e, dmg, 'dark', 'orbit', p);
             p.orbitHits.set(e, 0.5);
+          }
+        }
+        for (const n of this.nests) {
+          if (p.orbitHits.has(n)) continue;
+          if (Math.hypot(n.x - ox, n.y - oy) < n.size + orbR) {
+            n.hp -= dmg;
+            this.fxDamage(n.x, n.y, dmg, false);
+            this.damageStats.orbit = (this.damageStats.orbit || 0) + dmg;
+            p.orbitHits.set(n, 0.5);
           }
         }
       }
     }
 
     const swlv = slv(p, 'sword');
+    const evoSword = p.evolved?.has('sword');
     if (swlv > 0) {
       p.weaponT.sword -= dt;
       if (p.weaponT.sword <= 0) {
-        p.weaponT.sword = swlv >= 5 ? 0.5 : swlv >= 2 ? 0.85 : 1.1;
-        const radius = 70 + swlv * 8;
+        p.weaponT.sword = (swlv >= 5 ? 0.5 : swlv >= 2 ? 0.85 : 1.1) / (evoSword ? 1.4 : 1);
+        const radius = 70 + swlv * 8 + (evoSword ? 25 : 0);
         const dmg = (22 + swlv * 7) * p.dmgM * dmgBoost * (swlv >= 4 ? 1.5 : 1);
-        const arcDeg = swlv >= 4 ? 360 : swlv >= 3 ? 180 : swlv >= 2 ? 120 : 90;
+        const arcDeg = evoSword ? 360 : (swlv >= 4 ? 360 : swlv >= 3 ? 180 : swlv >= 2 ? 120 : 90);
         const arc = arcDeg * Math.PI / 180;
         let near = null, nd = Infinity;
         for (const e of this.enemies) {
@@ -1272,8 +1440,9 @@ export default class GameScene extends Phaser.Scene {
     }
 
     const cllv = slv(p, 'cloud');
+    const evoCloud = p.evolved?.has('cloud');
     if (cllv > 0) {
-      const max = cllv >= 5 ? 4 : cllv >= 4 ? 3 : cllv >= 2 ? 2 : 1;
+      const max = (cllv >= 5 ? 4 : cllv >= 4 ? 3 : cllv >= 2 ? 2 : 1) + (evoCloud ? 2 : 0);
       p.cloudT -= dt;
       if (p.cloudT <= 0 && this.clouds.length < max) {
         p.cloudT = 4;
@@ -1307,13 +1476,14 @@ export default class GameScene extends Phaser.Scene {
     }
 
     const milv = slv(p, 'missile');
+    const evoMissile = p.evolved?.has('missile');
     if (milv > 0) {
       p.weaponT.missile -= dt;
       if (p.weaponT.missile <= 0 && this.enemies.length > 0) {
-        p.weaponT.missile = milv >= 5 ? 0.8 : 1.2;
-        const count = milv;
+        p.weaponT.missile = (milv >= 5 ? 0.8 : 1.2) / (evoMissile ? 1.4 : 1);
+        const count = milv + (evoMissile ? 3 : 0);
         const dmg = (25 + milv * 5) * p.dmgM * dmgBoost * (milv >= 4 ? 1.4 : 1);
-        const aoe = milv >= 5 ? 80 : milv >= 3 ? 50 : 30;
+        const aoe = (milv >= 5 ? 80 : milv >= 3 ? 50 : 30) * (evoMissile ? 1.5 : 1);
         const sorted = this.enemies
           .filter(e => !e.charmed)
           .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
@@ -1334,8 +1504,9 @@ export default class GameScene extends Phaser.Scene {
     if (wlv > 0) {
       p.weaponT.whip -= dt;
       if (p.weaponT.whip <= 0) {
-        p.weaponT.whip = wlv >= 5 ? 0.6 : wlv >= 3 ? 0.85 : 1.0;
-        const length = wlv >= 4 ? 200 : wlv >= 2 ? 165 : 130;
+        p.weaponT.whip = (wlv >= 5 ? 0.6 : wlv >= 3 ? 0.85 : 1.0) / (p.evolved?.has('whip') ? 1.3 : 1);
+        const evoWhip = p.evolved?.has('whip');
+        const length = (wlv >= 4 ? 200 : wlv >= 2 ? 165 : 130) * (evoWhip ? 1.5 : 1);
         const width = 38;
         const dmg = (18 + wlv * 5) * p.dmgM * dmgBoost * (wlv >= 4 ? 1.3 : 1);
         let near = null, nd = Infinity;
@@ -1344,7 +1515,7 @@ export default class GameScene extends Phaser.Scene {
           if (d < nd) { nd = d; near = e; }
         }
         const baseAngle = near ? Math.atan2(near.y - p.y, near.x - p.x) : 0;
-        const angles = wlv >= 5 ? [0, Math.PI / 2, Math.PI, -Math.PI / 2]
+        const angles = (evoWhip || wlv >= 5) ? [0, Math.PI / 2, Math.PI, -Math.PI / 2]
                      : wlv >= 3 ? [baseAngle, baseAngle + Math.PI]
                                 : [baseAngle];
         for (const a of angles) {
@@ -1356,16 +1527,16 @@ export default class GameScene extends Phaser.Scene {
     }
 
     const nlv = slv(p, 'nova');
+    const evoNova = p.evolved?.has('nova');
     if (nlv > 0) {
       p.weaponT.nova -= dt;
       if (p.weaponT.nova <= 0) {
-        p.weaponT.nova = nlv >= 4 ? 1.2 : 2;
-        const r = (80 + nlv * 25) * (nlv >= 5 ? 1.5 : 1);
+        p.weaponT.nova = (nlv >= 4 ? 1.2 : 2) / (evoNova ? 1.5 : 1);
+        const r = (80 + nlv * 25) * (nlv >= 5 ? 1.5 : 1) * (evoNova ? 1.7 : 1);
         const dmg = (18 + nlv * 10) * p.dmgM * (nlv >= 3 ? 1.5 : 1) * dmgBoost;
         for (const e of this.enemies) {
           if (Math.hypot(e.x - p.x, e.y - p.y) < r) {
-            const dealt = e.takeDamage(dmg, 'fire', this);
-            if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+            this.dmgTo(e, dmg, 'fire', 'nova', p);
             if (nlv >= 5) {
               const a = Math.atan2(e.y - p.y, e.x - p.x);
               e.vx += Math.cos(a) * 320;
@@ -1377,6 +1548,7 @@ export default class GameScene extends Phaser.Scene {
           if (Math.hypot(n.x - p.x, n.y - p.y) < r + n.size) {
             n.hp -= dmg;
             this.fxDamage(n.x, n.y, dmg, false);
+            this.damageStats.nova = (this.damageStats.nova || 0) + dmg;
           }
         }
         this.fxNova(p.x, p.y, r);
@@ -1388,28 +1560,155 @@ export default class GameScene extends Phaser.Scene {
     const llv = slv(p, 'lightning');
     if (llv > 0) {
       p.weaponT.lightning -= dt;
-      if (p.weaponT.lightning <= 0 && this.enemies.length > 0) {
+      const hasTargets = this.enemies.length > 0 || this.nests.length > 0;
+      if (p.weaponT.lightning <= 0 && hasTargets) {
         p.weaponT.lightning = llv >= 5 ? 0.4 : llv >= 3 ? 0.8 : 1.5;
-        const chains = llv >= 4 ? 4 : llv >= 2 ? 2 : 1;
-        const dmg = (20 + llv * 8) * p.dmgM * dmgBoost;
+        const chains = llv >= 5 ? 99 : llv >= 4 ? 4 : llv >= 2 ? 2 : 1;
+        const baseDmg = (20 + llv * 8) * p.dmgM * dmgBoost;
+        const range = llv >= 5 ? 280 : llv >= 3 ? 240 : 200;
+        const firstRange = 360;
         let prev = { x: p.x, y: p.y };
-        let pool = this.enemies.slice();
-        for (let c = 0; c < chains && pool.length > 0; c++) {
-          let near = null, nd = Infinity;
-          for (const e of pool) {
+        const usedEnemies = new Set();
+        const usedNests = new Set();
+        let lastTarget = null;
+        for (let c = 0; c < chains; c++) {
+          const r = c === 0 ? firstRange : range;
+          let near = null, nd = Infinity, nearKind = null;
+          for (const e of this.enemies) {
+            if (usedEnemies.has(e)) continue;
             const d = Math.hypot(e.x - prev.x, e.y - prev.y);
-            if (d < nd) { nd = d; near = e; }
+            if (d < nd && d < r) { nd = d; near = e; nearKind = 'enemy'; }
           }
-          if (!near || nd > 360) break;
-          const dealt = near.takeDamage(dmg, 'lightning', this);
-          if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
-          this.fxBolt(prev.x, prev.y, near.x, near.y);
+          for (const n of this.nests) {
+            if (usedNests.has(n)) continue;
+            const d = Math.hypot(n.x - prev.x, n.y - prev.y);
+            if (d < nd && d < r) { nd = d; near = n; nearKind = 'nest'; }
+          }
+          if (!near) break;
+          // Damage falloff per jump (15% reduction)
+          const dmg = baseDmg * Math.pow(0.85, c);
+          if (nearKind === 'enemy') {
+            this.dmgTo(near, dmg, 'lightning', 'lightning', p);
+            usedEnemies.add(near);
+          } else {
+            near.hp -= dmg;
+            this.fxDamage(near.x, near.y, dmg, false);
+            this.damageStats.lightning = (this.damageStats.lightning || 0) + dmg;
+            usedNests.add(near);
+          }
+          this.fxBolt(prev.x, prev.y, near.x, near.y, c === 0);
+          // Branch sparks at each node (visual flair)
+          this.fxSpark(near.x, near.y);
           prev = { x: near.x, y: near.y };
-          pool = pool.filter(e => e !== near);
+          lastTarget = near;
+        }
+        if (lastTarget) playSfx('lightning');
+      }
+    }
+
+    // ── Charged Bolt — éventail de disques zigzagants
+    const cblv = slv(p, 'chargedBolt');
+    if (cblv > 0) {
+      p.weaponT.chargedBolt = (p.weaponT.chargedBolt || 0) - dt;
+      if (p.weaponT.chargedBolt <= 0) {
+        p.weaponT.chargedBolt = cblv >= 2 ? 1.0 : 1.2;
+        const count = cblv >= 5 ? 10 : cblv >= 4 ? 8 : cblv >= 3 ? 6 : cblv >= 2 ? 5 : 3;
+        const spread = Math.PI * 0.55; // ~100°
+        const speed = 240;
+        const range = cblv >= 4 ? 460 : 350;
+        const dmg = (10 + cblv * 4) * p.dmgM * dmgBoost * (cblv >= 3 ? 1.3 : 1) * (cblv >= 5 ? 1.5 : 1);
+        const pierce = cblv >= 5 ? 99 : 1;
+        // Aim at the closest enemy or nest if any, otherwise face the move dir.
+        let near = null, nd = Infinity;
+        for (const e of this.enemies) {
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          if (d < nd) { nd = d; near = e; }
+        }
+        for (const n of this.nests) {
+          const d = Math.hypot(n.x - p.x, n.y - p.y);
+          if (d < nd) { nd = d; near = n; }
+        }
+        const aim = near
+          ? Math.atan2(near.y - p.y, near.x - p.x)
+          : (p._aimAngle ?? 0);
+        for (let i = 0; i < count; i++) {
+          const t = count === 1 ? 0.5 : i / (count - 1);
+          const a = aim - spread / 2 + spread * t;
+          this.chargedBolts.push(new ChargedBolt(this, p.x, p.y, a, speed, dmg, pierce, range));
+          // Tag the source player so damage attribution works
+          this.chargedBolts[this.chargedBolts.length - 1].source = p;
         }
         playSfx('lightning');
       }
     }
+  }
+
+  updateChargedBolts(dt) {
+    if (!this.chargedBolts || this.chargedBolts.length === 0) return;
+    for (const b of this.chargedBolts) {
+      // Zigzag = base direction + perpendicular sinusoidal lateral drift.
+      b.osc += b.oscSpeed * dt;
+      const fx = Math.cos(b.baseAngle);
+      const fy = Math.sin(b.baseAngle);
+      const px = -fy, py = fx; // perp
+      const lat = Math.sin(b.osc) * b.oscAmp;
+      const vx = fx * b.speed + px * lat;
+      const vy = fy * b.speed + py * lat;
+      b.dx = vx; b.dy = vy;
+      // record trail
+      b.trail.push({ x: b.x, y: b.y });
+      if (b.trail.length > 6) b.trail.shift();
+      b.x += vx * dt;
+      b.y += vy * dt;
+      b.life -= dt;
+      // Bounds: kill off-screen
+      if (b.x < -40 || b.x > this.W + 40 || b.y < -40 || b.y > this.H + 40) {
+        b.alive = false;
+      }
+      if (b.life <= 0) b.alive = false;
+      // Collisions: enemies
+      for (const e of this.enemies) {
+        if (b.hits.has(e)) continue;
+        if (Math.hypot(e.x - b.x, e.y - b.y) < e.size + 8) {
+          const dealt = this.dmgTo(e, b.dmg, 'lightning', 'chargedBolt', b.source);
+          if (b.source && b.source.ls > 0 && dealt > 0) {
+            b.source.hp = Math.min(b.source.maxHp, b.source.hp + dealt * b.source.ls);
+          }
+          b.hits.add(e);
+          this.fxSpark(b.x, b.y);
+          if (b.hits.size >= b.pierce) { b.alive = false; break; }
+        }
+      }
+      // Collisions: nests
+      if (b.alive) {
+        for (const n of this.nests) {
+          if (b.hits.has(n)) continue;
+          if (Math.hypot(n.x - b.x, n.y - b.y) < n.size + 8) {
+            n.hp -= b.dmg;
+            this.fxDamage(n.x, n.y, b.dmg, false);
+            if (this.damageStats) this.damageStats.chargedBolt = (this.damageStats.chargedBolt || 0) + b.dmg;
+            b.hits.add(n);
+            this.fxSpark(b.x, b.y);
+            if (b.hits.size >= b.pierce) { b.alive = false; break; }
+          }
+        }
+      }
+      // Obstacles toujours bloquants (même pour projectiles perforants)
+      if (b.alive) {
+        for (const o of this.obstacles) {
+          if (Math.hypot(o.x - b.x, o.y - b.y) < o.size + 8) {
+            o.hp -= b.dmg;
+            this.fxSpark(b.x, b.y);
+            b.alive = false;
+            break;
+          }
+        }
+      }
+    }
+    this.chargedBolts = this.chargedBolts.filter(b => {
+      if (!b.alive) { b.destroy(); return false; }
+      return true;
+    });
   }
 
   updateTrail(dt, p, dmgBoost) {
@@ -1443,9 +1742,20 @@ export default class GameScene extends Phaser.Scene {
         if (p.trailHits.has(e)) continue;
         for (const t of this.trail) {
           if (Math.hypot(e.x - t.x, e.y - t.y) < t.radius + e.size) {
-            const dealt = e.takeDamage(dmg, 'poison', this);
-            if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+            this.dmgTo(e, dmg, 'poison', 'trail', p);
             p.trailHits.set(e, 0.4);
+            break;
+          }
+        }
+      }
+      for (const n of this.nests) {
+        if (p.trailHits.has(n)) continue;
+        for (const t of this.trail) {
+          if (Math.hypot(n.x - t.x, n.y - t.y) < t.radius + n.size) {
+            n.hp -= dmg;
+            this.fxDamage(n.x, n.y, dmg, false);
+            this.damageStats.trail = (this.damageStats.trail || 0) + dmg;
+            p.trailHits.set(n, 0.4);
             break;
           }
         }
@@ -1479,8 +1789,7 @@ export default class GameScene extends Phaser.Scene {
         if (Math.hypot(e.x - t.x, e.y - t.y) < t.triggerR + e.size) {
           for (const e2 of this.enemies) {
             if (Math.hypot(e2.x - t.x, e2.y - t.y) < t.radius + e2.size) {
-              const dealt = e2.takeDamage(t.dmg, 'fire', this);
-              if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+              this.dmgTo(e2, t.dmg, 'fire', 'traps', p);
               if (lvl >= 5) e2.statuses.frozen = { duration: 0.5 };
             }
           }
@@ -1488,6 +1797,7 @@ export default class GameScene extends Phaser.Scene {
             if (Math.hypot(n.x - t.x, n.y - t.y) < t.radius + n.size) {
               n.hp -= t.dmg;
               this.fxDamage(n.x, n.y, t.dmg, false);
+              this.damageStats.traps = (this.damageStats.traps || 0) + t.dmg;
             }
           }
           this.fxNova(t.x, t.y, t.radius);
@@ -1522,7 +1832,7 @@ export default class GameScene extends Phaser.Scene {
         if (lvl >= 5) {
           for (const e of this.enemies) {
             if (Math.hypot(e.x - m.x, e.y - m.y) < 70 + e.size) {
-              e.takeDamage(20 + lvl * 4, 'fire', this);
+              this.dmgTo(e, 20 + lvl * 4, 'fire', 'summon', p);
             }
           }
           this.fxNova(m.x, m.y, 70);
@@ -1551,7 +1861,7 @@ export default class GameScene extends Phaser.Scene {
         m.y += m.vy * dt;
         m.attackCD = Math.max(0, m.attackCD - dt);
         if (m.attackCD <= 0 && Math.hypot(m.x - target.x, m.y - target.y) < m.size + target.size) {
-          target.takeDamage(m.dmg, 'physical', this);
+          this.dmgTo(target, m.dmg, 'physical', 'summon', p);
           m.attackCD = 0.5;
           // minion takes a bit of damage on contact
           m.hp -= target.dmg * 0.4;
@@ -1670,7 +1980,7 @@ export default class GameScene extends Phaser.Scene {
         t.fireT -= dt;
         if (t.fireT <= 0) {
           t.fireT = t.fireRate;
-          target.takeDamage(t.dmg * dmgBoost, t.dmgType, this);
+          this.dmgTo(target, t.dmg * dmgBoost, t.dmgType, 'turret', p);
           this.fxTurretShot(t.x, t.y - 2, target.x, target.y, t.coreColor);
         }
       }
@@ -1735,19 +2045,25 @@ export default class GameScene extends Phaser.Scene {
           if (Math.hypot(m.x - n.x, m.y - n.y) < n.size + 5) { exploded = true; break; }
         }
       }
+      // Le missile explose aussi au contact d'un obstacle (ne passe plus à travers).
+      if (!exploded) {
+        for (const o of this.obstacles) {
+          if (Math.hypot(m.x - o.x, m.y - o.y) < o.size + 5) { exploded = true; break; }
+        }
+      }
       if (exploded) {
         {
           for (const e2 of this.enemies) {
             if (e2.charmed) continue;
             if (Math.hypot(e2.x - m.x, e2.y - m.y) < m.aoe + e2.size) {
-              const dealt = e2.takeDamage(m.dmg, 'fire', this);
-              if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+              this.dmgTo(e2, m.dmg, 'fire', 'missile', p);
             }
           }
           for (const nn of this.nests) {
             if (Math.hypot(nn.x - m.x, nn.y - m.y) < m.aoe + nn.size) {
               nn.hp -= m.dmg;
               this.fxDamage(nn.x, nn.y, m.dmg, false);
+              this.damageStats.missile = (this.damageStats.missile || 0) + m.dmg;
             }
           }
           this.fxNova(m.x, m.y, m.aoe);
@@ -1810,13 +2126,12 @@ export default class GameScene extends Phaser.Scene {
       for (const e of this.enemies) {
         if (e.charmed) continue;
         if (Math.hypot(b.x - e.x, b.y - e.y) < e.size + 5) {
-          const dealt = e.takeDamage(b.dmg, 'physical', this);
-          if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+          this.dmgTo(e, b.dmg, 'physical', 'floating', p);
           if (lvl >= 5) {
             for (const e2 of this.enemies) {
               if (e2 === e || e2.charmed) continue;
               if (Math.hypot(e2.x - b.x, e2.y - b.y) < 50 + e2.size) {
-                e2.takeDamage(b.dmg * 0.5, 'fire', this);
+                this.dmgTo(e2, b.dmg * 0.5, 'fire', 'floating', p);
               }
             }
             this.fxNova(b.x, b.y, 50);
@@ -1850,19 +2165,25 @@ export default class GameScene extends Phaser.Scene {
           if (Math.hypot(g.x - n.x, g.y - n.y) < n.size + 5) { triggered = true; break; }
         }
       }
+      // La grenade explose aussi au contact d'un obstacle.
+      if (!triggered) {
+        for (const o of this.obstacles) {
+          if (Math.hypot(g.x - o.x, g.y - o.y) < o.size + 5) { triggered = true; break; }
+        }
+      }
       if (triggered) {
         const explode = (cx, cy) => {
           for (const e of this.enemies) {
             if (e.charmed) continue;
             if (Math.hypot(e.x - cx, e.y - cy) < g.aoe + e.size) {
-              const dealt = e.takeDamage(g.dmg, 'fire', this);
-              if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+              this.dmgTo(e, g.dmg, 'fire', 'grenade', p);
             }
           }
           for (const n of this.nests) {
             if (Math.hypot(n.x - cx, n.y - cy) < g.aoe + n.size) {
               n.hp -= g.dmg;
               this.fxDamage(n.x, n.y, g.dmg, false);
+              this.damageStats.grenade = (this.damageStats.grenade || 0) + g.dmg;
             }
           }
           this.fxNova(cx, cy, g.aoe);
@@ -1892,10 +2213,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   updateNests(dt, p) {
-    // Spawn a new nest periodically (max 3 simultaneous)
+    // Spawn a new nest periodically (max 4 simultaneous, varied types)
     this.nestSpawnT -= dt;
-    if (this.nestSpawnT <= 0 && this.nests.length < 3) {
-      this.nestSpawnT = 35 + Math.random() * 20;
+    if (this.nestSpawnT <= 0 && this.nests.length < 4) {
+      this.nestSpawnT = 30 + Math.random() * 18;
       // Find a position away from the player
       let nx = 0, ny = 0, tries = 0;
       do {
@@ -1903,8 +2224,19 @@ export default class GameScene extends Phaser.Scene {
         ny = 80 + Math.random() * (this.H - 160);
         tries++;
       } while (Math.hypot(nx - p.x, ny - p.y) < 220 && tries < 12);
-      const type = Math.random() < 0.5 ? 'cave' : 'cemetery';
-      this.nests.push(new Nest(this, nx, ny, type));
+      // Pick an enemy type unlocked by current elapsed time (per WAVES schedule).
+      // Prefer types not already represented; fall back to any unlocked type.
+      const unlocked = ['bat'];
+      if (this.elapsed >= 30) unlocked.push('zombie');
+      if (this.elapsed >= 60) unlocked.push('skeleton');
+      if (this.elapsed >= 90) unlocked.push('ghost');
+      if (this.elapsed >= 120) unlocked.push('knight');
+      if (this.elapsed >= 150) unlocked.push('witch');
+      const present = new Set(this.nests.map(n => n.enemyType));
+      const candidates = unlocked.filter(t => !present.has(t));
+      const pool = candidates.length > 0 ? candidates : unlocked;
+      const enemyType = pool[Math.floor(Math.random() * pool.length)];
+      this.nests.push(new Nest(this, nx, ny, enemyType));
     }
     // Tick + spawn children + cleanup
     this.nests = this.nests.filter(n => {
@@ -1918,12 +2250,11 @@ export default class GameScene extends Phaser.Scene {
       n.spawnT -= dt;
       if (n.spawnT <= 0) {
         n.spawnT = n.spawnInterval;
-        const t = n.type === 'cave' ? 'bat' : 'skeleton';
         const tier = Math.floor(this.elapsed / 60);
         const hpMul = (1 + tier * 0.3) * (this.mode === 'horde' ? 0.6 : 1);
         const dmgMul = 1 + tier * 0.1;
         const ang = Math.random() * Math.PI * 2;
-        const child = new Enemy(this, n.x + Math.cos(ang) * 24, n.y + Math.sin(ang) * 24, t, hpMul, 1, dmgMul);
+        const child = new Enemy(this, n.x + Math.cos(ang) * 24, n.y + Math.sin(ang) * 24, n.enemyType, hpMul, 1, dmgMul);
         this.enemies.push(child);
       }
       return true;
@@ -1965,17 +2296,69 @@ export default class GameScene extends Phaser.Scene {
     this.shake(0.006, 200);
     stopMusic();
     const choices = getChoices(p);
-    bus.emit('levelup', { lv: p.level, choices, playerId: p.id });
+    bus.emit('levelup', {
+      lv: p.level, choices, playerId: p.id,
+      rerollsLeft: p.rerollsLeft || 0,
+      banishesLeft: p.banishesLeft || 0,
+    });
     this.emitHud();
+  }
+
+  // Endless mode: resume after victory at higher difficulty.
+  onEndlessContinue() {
+    if (!this.victoryClaimed) return;
+    this.over = false;
+    this.endless = true;
+    this.endlessTier = (this.endlessTier || 0) + 1;
+    bus.emit('phase', 'playing');
+    if (!this.bossMusicOn) startMusic('boss');
+    this.emitHud();
+  }
+
+  onSkillReroll() {
+    const p = this.pendingLevelupPlayer;
+    if (!p || (p.rerollsLeft || 0) <= 0) return;
+    p.rerollsLeft -= 1;
+    const choices = getChoices(p);
+    playSfx('uimove');
+    bus.emit('levelup', {
+      lv: p.level, choices, playerId: p.id,
+      rerollsLeft: p.rerollsLeft, banishesLeft: p.banishesLeft,
+    });
+  }
+
+  onSkillBanish(id) {
+    const p = this.pendingLevelupPlayer;
+    if (!p || (p.banishesLeft || 0) <= 0 || !id) return;
+    if (!(p.banished instanceof Set)) p.banished = new Set();
+    p.banished.add(id);
+    p.banishesLeft -= 1;
+    const choices = getChoices(p);
+    playSfx('uipick');
+    bus.emit('levelup', {
+      lv: p.level, choices, playerId: p.id,
+      rerollsLeft: p.rerollsLeft, banishesLeft: p.banishesLeft,
+    });
   }
 
   onSkillPick(id) {
     const p = this.pendingLevelupPlayer || this.player;
-    p.skills[id] = (p.skills[id] || 0) + 1;
-    if (id === 'heart') {
-      const lv = p.skills.heart;
-      p.maxHp += lv <= 2 ? 50 : 80;
-      if (lv === 3) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.15);
+    if (id.startsWith('evo:')) {
+      const evoId = id.slice(4);
+      if (!(p.evolved instanceof Set)) p.evolved = new Set();
+      p.evolved.add(evoId);
+      // Heal a bit on evolution as flavor
+      p.hp = Math.min(p.maxHp, p.hp + 30);
+      this.fxNova(p.x, p.y, 80);
+      this.shake(0.008, 220);
+      playSfx('victory');
+    } else {
+      p.skills[id] = (p.skills[id] || 0) + 1;
+      if (id === 'heart') {
+        const lv = p.skills.heart;
+        p.maxHp += lv <= 2 ? 50 : 80;
+        if (lv === 3) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.15);
+      }
     }
     refreshStats(p);
     this.pendingLevelupPlayer = null;
@@ -2009,8 +2392,7 @@ export default class GameScene extends Phaser.Scene {
         while (diff < -Math.PI) diff += Math.PI * 2;
         if (Math.abs(diff) > arc / 2) continue;
       }
-      const dealt = e.takeDamage(dmg, 'physical', this);
-      if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+      this.dmgTo(e, dmg, 'physical', 'sword', p);
       const a = Math.atan2(e.y - p.y, e.x - p.x);
       e.vx += Math.cos(a) * 80;
       e.vy += Math.sin(a) * 80;
@@ -2026,6 +2408,7 @@ export default class GameScene extends Phaser.Scene {
         if (Math.abs(diff) > arc / 2) continue;
       }
       n.hp -= dmg;
+      this.damageStats.sword = (this.damageStats.sword || 0) + dmg;
       this.fxDamage(n.x, n.y, dmg, false);
     }
   }
@@ -2050,7 +2433,7 @@ export default class GameScene extends Phaser.Scene {
       e.y += e.vy * dt;
       if (Math.hypot(e.x - target.x, e.y - target.y) < e.size + target.size) {
         const dmg = e.dmg * (e.charmedDmgMul || 1);
-        target.takeDamage(dmg, 'physical', this);
+        this.dmgTo(target, dmg, 'physical', 'charm', null);
         // counter damage so the charmed minion can actually die in fights
         e.hp -= target.dmg * 0.5;
       }
@@ -2097,14 +2480,62 @@ export default class GameScene extends Phaser.Scene {
     };
   }
 
+  // Helper: apply damage to a single enemy via Enemy.takeDamage, then handle
+  // lifesteal and damage-tracking in one place. Returns the dealt amount.
+  dmgTo(target, amount, type, weaponId, sourcePlayer) {
+    if (!target) return 0;
+    // Apply evolution multiplier if the weapon has been evolved (1.6× by default; 1.8× for sword, 1.5× for whip/cloud, etc.)
+    let evoMul = 1;
+    if (sourcePlayer && weaponId && sourcePlayer.evolved instanceof Set && sourcePlayer.evolved.has(weaponId)) {
+      const EVO_MUL = { sword: 1.8, dagger: 1.6, nova: 1.6, lightning: 1.5, whip: 1.5, cloud: 1.4, missile: 1.5, orbit: 1.5 };
+      evoMul = EVO_MUL[weaponId] || 1.5;
+    }
+    let finalAmount = amount * evoMul;
+    // Roll for crit (only when a source player is provided, since enemies → players use a different path)
+    let isCrit = false;
+    if (sourcePlayer && sourcePlayer.critChance > 0 && Math.random() < sourcePlayer.critChance) {
+      isCrit = true;
+      finalAmount *= (sourcePlayer.critMult || 2);
+    }
+    const dealt = target.takeDamage(finalAmount, type, this);
+    if (dealt > 0 && isCrit) {
+      this.fxDamage(target.x, target.y, dealt, true);
+    }
+    if (dealt > 0 && weaponId) {
+      this.damageStats[weaponId] = (this.damageStats[weaponId] || 0) + dealt;
+    }
+    if (dealt > 0) this.recordDps(dealt);
+    if (dealt > 0 && sourcePlayer?.ls > 0) {
+      sourcePlayer.hp = Math.min(sourcePlayer.maxHp, sourcePlayer.hp + dealt * sourcePlayer.ls);
+    }
+    return dealt;
+  }
+
+  // Sliding-window DPS tracker — keeps events from the last DPS_WINDOW seconds.
+  recordDps(amount) {
+    if (!this._dpsEvents) this._dpsEvents = [];
+    this._dpsEvents.push({ t: this.elapsed, a: amount });
+  }
+  computeDps() {
+    const W = 5; // seconds
+    if (!this._dpsEvents) return 0;
+    const cutoff = this.elapsed - W;
+    while (this._dpsEvents.length > 0 && this._dpsEvents[0].t < cutoff) {
+      this._dpsEvents.shift();
+    }
+    let sum = 0;
+    for (const ev of this._dpsEvents) sum += ev.a;
+    return sum / W;
+  }
+
   // Helper: deal damage to all enemies + nests in a radius around (x, y).
   // Returns total damage dealt (used for lifesteal).
-  damageRadius(x, y, radius, dmg, type, includeNests = true) {
+  damageRadius(x, y, radius, dmg, type, includeNests = true, weaponId, sourcePlayer) {
     let total = 0;
     for (const e of this.enemies) {
       if (e.charmed) continue;
       if (Math.hypot(e.x - x, e.y - y) < radius + e.size) {
-        const dealt = e.takeDamage(dmg, type, this);
+        const dealt = this.dmgTo(e, dmg, type, weaponId, sourcePlayer);
         total += dealt;
       }
     }
@@ -2113,6 +2544,7 @@ export default class GameScene extends Phaser.Scene {
         if (Math.hypot(n.x - x, n.y - y) < radius + n.size) {
           n.hp -= dmg;
           this.fxDamage(n.x, n.y, dmg, false);
+          if (weaponId) this.damageStats[weaponId] = (this.damageStats[weaponId] || 0) + dmg;
           total += dmg;
         }
       }
@@ -2217,8 +2649,7 @@ export default class GameScene extends Phaser.Scene {
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       if (Math.abs(diff) > half) continue;
-      const dealt = e.takeDamage(dmg, 'fire', this);
-      if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+      this.dmgTo(e, dmg, 'fire', 'flamethrower', p);
     }
     for (const n of this.nests) {
       const dx = n.x - p.x, dy = n.y - p.y;
@@ -2232,6 +2663,7 @@ export default class GameScene extends Phaser.Scene {
       if (Math.abs(diff) > half) continue;
       n.hp -= dmg;
       this.fxDamage(n.x, n.y, dmg, false);
+      this.damageStats.flamethrower = (this.damageStats.flamethrower || 0) + dmg;
     }
   }
 
@@ -2298,8 +2730,7 @@ export default class GameScene extends Phaser.Scene {
         for (const e of this.enemies) {
           if (e.charmed) continue;
           if (Math.hypot(e.x - c.x, e.y - c.y) < radius + e.size) {
-            e.takeDamage(dmg, 'lightning', this);
-            if (p.ls > 0) p.hp = Math.min(p.maxHp, p.hp + dmg * p.ls);
+            this.dmgTo(e, dmg, 'lightning', 'cloud', p);
             anyHit = true;
           }
         }
@@ -2307,6 +2738,7 @@ export default class GameScene extends Phaser.Scene {
           if (Math.hypot(n.x - c.x, n.y - c.y) < radius + n.size) {
             n.hp -= dmg;
             this.fxDamage(n.x, n.y, dmg, false);
+            this.damageStats.cloud = (this.damageStats.cloud || 0) + dmg;
             anyHit = true;
           }
         }
@@ -2353,8 +2785,7 @@ export default class GameScene extends Phaser.Scene {
       const fwd = cos * dx + sin * dy;
       const side = -sin * dx + cos * dy;
       if (fwd >= -e.size && fwd <= length + e.size && Math.abs(side) <= half + e.size) {
-        const dealt = e.takeDamage(dmg, 'physical', this);
-        if (p.ls > 0 && dealt > 0) p.hp = Math.min(p.maxHp, p.hp + dealt * p.ls);
+        this.dmgTo(e, dmg, 'physical', 'whip', p);
         const a = Math.atan2(e.y - p.y, e.x - p.x);
         e.vx += Math.cos(a) * 110;
         e.vy += Math.sin(a) * 110;
@@ -2367,6 +2798,7 @@ export default class GameScene extends Phaser.Scene {
       if (fwd >= -n.size && fwd <= length + n.size && Math.abs(side) <= half + n.size) {
         n.hp -= dmg;
         this.fxDamage(n.x, n.y, dmg, false);
+        this.damageStats.whip = (this.damageStats.whip || 0) + dmg;
       }
     }
   }
@@ -2444,21 +2876,101 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  fxBolt(x1, y1, x2, y2) {
-    const g = this.add.graphics().setDepth(12);
-    g.lineStyle(2, 0xffe066, 1);
-    const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * 28;
-    const my = (y1 + y2) / 2 + (Math.random() - 0.5) * 28;
-    g.beginPath();
-    g.moveTo(x1, y1);
-    g.lineTo(mx, my);
-    g.lineTo(x2, y2);
-    g.strokePath();
+  fxBolt(x1, y1, x2, y2, primary = false) {
+    // Multi-segment zigzag with perpendicular jitter (Diablo-style chain lightning).
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    const nx = -uy, ny = ux; // perpendicular unit
+    const segs = Math.max(4, Math.floor(len / 22));
+    const amp = primary ? 14 : 11;
+    const pts = [{ x: x1, y: y1 }];
+    for (let i = 1; i < segs; i++) {
+      const t = i / segs;
+      const j = (Math.random() - 0.5) * amp * 2;
+      pts.push({ x: x1 + dx * t + nx * j, y: y1 + dy * t + ny * j });
+    }
+    pts.push({ x: x2, y: y2 });
+
+    const drawPath = (g, pts) => {
+      g.beginPath();
+      g.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
+      g.strokePath();
+    };
+
+    // Glow halo (white-blue, thick)
+    const halo = this.add.graphics().setDepth(11);
+    halo.lineStyle(primary ? 9 : 7, 0xaaccff, 0.45);
+    drawPath(halo, pts);
+
+    // Main core (bright yellow-white)
+    const core = this.add.graphics().setDepth(12);
+    core.lineStyle(primary ? 3 : 2, 0xffffff, 1);
+    drawPath(core, pts);
+
+    // Yellow bolt (mid-layer)
+    const bolt = this.add.graphics().setDepth(12);
+    bolt.lineStyle(primary ? 5 : 4, 0xffe066, 0.85);
+    drawPath(bolt, pts);
+
+    // Random dead-end branches (1-3 small forks for primary)
+    const branches = primary ? 2 : 1;
+    const forkGfx = this.add.graphics().setDepth(11);
+    forkGfx.lineStyle(2, 0xffe066, 0.6);
+    for (let b = 0; b < branches; b++) {
+      const start = pts[Math.floor(Math.random() * (pts.length - 1)) + 1];
+      const ang = Math.random() * Math.PI * 2;
+      const flen = 18 + Math.random() * 22;
+      const fpts = [start];
+      let cx = start.x, cy = start.y;
+      const dirX = Math.cos(ang), dirY = Math.sin(ang);
+      const fsegs = 3;
+      for (let i = 1; i <= fsegs; i++) {
+        const t = i / fsegs;
+        cx = start.x + dirX * flen * t + (Math.random() - 0.5) * 6;
+        cy = start.y + dirY * flen * t + (Math.random() - 0.5) * 6;
+        fpts.push({ x: cx, y: cy });
+      }
+      forkGfx.beginPath();
+      forkGfx.moveTo(fpts[0].x, fpts[0].y);
+      for (let i = 1; i < fpts.length; i++) forkGfx.lineTo(fpts[i].x, fpts[i].y);
+      forkGfx.strokePath();
+    }
+
     this.tweens.add({
-      targets: g, alpha: 0,
-      duration: 180,
-      onComplete: () => g.destroy(),
+      targets: [halo, core, bolt, forkGfx],
+      alpha: 0,
+      duration: 220,
+      onComplete: () => { halo.destroy(); core.destroy(); bolt.destroy(); forkGfx.destroy(); },
     });
+  }
+
+  fxSpark(x, y) {
+    const ring = this.add.graphics().setDepth(12);
+    ring.lineStyle(2, 0xffffff, 1);
+    ring.strokeCircle(x, y, 6);
+    this.tweens.add({
+      targets: ring, alpha: 0, scale: 2.2,
+      duration: 250,
+      onComplete: () => ring.destroy(),
+    });
+    for (let i = 0; i < 5; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 80 + Math.random() * 80;
+      const sg = this.add.graphics().setDepth(12);
+      sg.fillStyle(0xffe066, 1);
+      sg.fillCircle(0, 0, 1.5);
+      sg.x = x; sg.y = y;
+      this.tweens.add({
+        targets: sg,
+        x: x + Math.cos(a) * sp * 0.18,
+        y: y + Math.sin(a) * sp * 0.18,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => sg.destroy(),
+      });
+    }
   }
 
   generateDecor() {

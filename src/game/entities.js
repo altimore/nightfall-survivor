@@ -23,6 +23,18 @@ export const CONTROLLER_P2 = {
   joystick: false,
   color: 0x88ddff,
 };
+export const CONTROLLER_P3 = {
+  keys: { left: [], right: [], up: [], down: [], dash: [] },
+  gamepadIndex: 2,
+  joystick: false,
+  color: 0x80ffdb,
+};
+export const CONTROLLER_P4 = {
+  keys: { left: [], right: [], up: [], down: [], dash: [] },
+  gamepadIndex: 3,
+  joystick: false,
+  color: 0xffe066,
+};
 export const DEFAULT_CONTROLLER = CONTROLLER_SOLO;
 
 export const PLAYER_TINTS = [0xff4d6d, 0x88ddff, 0x80ffdb, 0xffe066];
@@ -44,13 +56,20 @@ export class Player {
     this.canDash = false; this.dashCD = 0; this.dashDur = 0;
     this.dashDir = { x: 0, y: 1 };
     this.ls = 0; this.kh = false;
+    this.critChance = 0.05; // base 5% chance
+    this.critMult = 2;      // ×2 damage on crit
     this.iframes = 0;
     this.kills = 0;
     this.dead = false;
     this.reviveT = 0;
+    // Reroll & banish budgets per run
+    this.rerollsLeft = 3;
+    this.banishesLeft = 1;
+    this.banished = new Set();
+    this.gold = 0;
     this.tint = controller?.color ?? PLAYER_TINTS[id % PLAYER_TINTS.length];
     // Per-player weapon state
-    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, whip: 0, charm: 0, missile: 0, grenade: 0 };
+    this.weaponT = { dagger: 0, sword: 0, nova: 0, lightning: 0, chargedBolt: 0, whip: 0, charm: 0, missile: 0, grenade: 0 };
     this.orbitAngle = 0;
     this.orbitHits = new Map();
     this.lastTrailX = x;
@@ -61,6 +80,11 @@ export class Player {
     this.gathererT = 0;
     this.turretT = 0;
     this.floatingT = 0;
+    this.cloudT = 0;
+    this.flameCD = 0;
+    this.flameDur = 0;
+    this.flameActive = false;
+    this._lastFlameAngle = 0;
     this.gpPrev = {};
     this.joystick = controller?.joystick
       ? { active: false, id: null, baseX: 0, baseY: 0, thumbX: 0, thumbY: 0, dx: 0, dy: 0 }
@@ -665,6 +689,68 @@ export class Projectile {
 }
 
 // ────────────────────────────────────────
+// ChargedBolt — electrified disc travelling outward in a zigzag (Diablo 2 Charged Bolt).
+// ────────────────────────────────────────
+export class ChargedBolt {
+  constructor(scene, x, y, baseAngle, speed, dmg, pierce, range) {
+    this.gfx = scene.add.graphics().setDepth(14);
+    this.x = x; this.y = y;
+    this.baseAngle = baseAngle;
+    this.speed = speed;
+    this.dmg = dmg;
+    this.pierce = pierce;
+    this.hits = new Set();
+    this.life = range / speed; // travel duration
+    this.alive = true;
+    // Zigzag oscillation params
+    this.osc = Math.random() * Math.PI * 2;
+    this.oscSpeed = 14 + Math.random() * 6; // rad/s
+    this.oscAmp = 130 + Math.random() * 40; // px/s lateral
+    // Visual rotation (the disc spins)
+    this.spin = Math.random() * Math.PI * 2;
+    // Per-frame velocity recomputed in update; expose for collision tangent.
+    this.dx = Math.cos(baseAngle) * speed;
+    this.dy = Math.sin(baseAngle) * speed;
+    // Trail of past positions for the lightning streak
+    this.trail = [];
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    this.spin += 0.6;
+    // electric trail (recent positions)
+    for (let i = 0; i < this.trail.length; i++) {
+      const t = this.trail[i];
+      const a = (i / this.trail.length) * 0.55;
+      g.fillStyle(0xa0d8ff, a);
+      g.fillCircle(t.x - this.x, t.y - this.y, 3 + i * 0.4);
+    }
+    // outer glow
+    g.fillStyle(0xa0d8ff, 0.32);
+    g.fillCircle(0, 0, 12);
+    g.fillStyle(0xc8e8ff, 0.55);
+    g.fillCircle(0, 0, 8);
+    // crackling disc — 4 jagged spokes
+    g.lineStyle(2, 0xffffff, 1);
+    for (let i = 0; i < 4; i++) {
+      const a = this.spin + (i * Math.PI) / 2;
+      const r1 = 3, r2 = 6 + Math.random() * 2;
+      g.beginPath();
+      g.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+      g.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+      g.strokePath();
+    }
+    // bright core
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(0, 0, 2.5);
+    g.fillStyle(0xffe066, 0.85);
+    g.fillCircle(0, 0, 1.5);
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
+// ────────────────────────────────────────
 // Enemy projectile
 // ────────────────────────────────────────
 export class EnemyProjectile {
@@ -815,18 +901,29 @@ export class Obstacle {
 }
 
 // ────────────────────────────────────────
-// Nest — stationary spawner with HP. Cave → bats, Cemetery → skeletons.
+// Nest — stationary spawner with HP. One nest per enemy type.
 // ────────────────────────────────────────
+export const NEST_CONFIG = {
+  bat:      { hp: 100, interval: 4,   barCol: 0xff4400, icon: '🕳️', label: 'Grotte hantée' },
+  zombie:   { hp: 180, interval: 7,   barCol: 0x66aa33, icon: '🪦', label: 'Tombe fraîche' },
+  skeleton: { hp: 150, interval: 6,   barCol: 0xff0000, icon: '⚰️', label: 'Crypte funeste' },
+  ghost:    { hp: 130, interval: 5.5, barCol: 0x88aaff, icon: '🪨', label: 'Pierre dressée' },
+  knight:   { hp: 240, interval: 9,   barCol: 0xffaa44, icon: '🏰', label: 'Forteresse' },
+  witch:    { hp: 170, interval: 6.5, barCol: 0x00ff44, icon: '🧪', label: 'Chaudron sorcier' },
+};
+
 export class Nest {
-  constructor(scene, x, y, type) {
+  constructor(scene, x, y, enemyType) {
     this.gfx = scene.add.graphics().setDepth(4);
     this.x = x; this.y = y;
-    this.type = type; // 'cave' | 'cemetery'
-    this.maxHp = type === 'cave' ? 100 : 150;
+    this.enemyType = enemyType;
+    const cfg = NEST_CONFIG[enemyType] || NEST_CONFIG.bat;
+    this.maxHp = cfg.hp;
     this.hp = this.maxHp;
     this.size = 24;
     this.spawnT = 5;
-    this.spawnInterval = type === 'cave' ? 4 : 6;
+    this.spawnInterval = cfg.interval;
+    this.barCol = cfg.barCol;
     this.bob = 0;
     this.alive = true;
   }
@@ -835,7 +932,9 @@ export class Nest {
     g.clear();
     g.x = this.x; g.y = this.y;
     this.bob += 0.04;
-    if (this.type === 'cave') {
+    const t = this.bob;
+    if (this.enemyType === 'bat') {
+      // Cave entrance — dark mouth with rocks and glowing eyes
       g.fillStyle(0x000000, 0.6);
       g.fillEllipse(0, 6, 56, 18);
       g.fillStyle(0x1a0e08, 1);
@@ -848,13 +947,39 @@ export class Nest {
       g.fillCircle(-2, 16, 5);
       g.fillCircle(8, -10, 4);
       g.fillCircle(-10, -12, 4);
-      // glowing eyes inside the cave
-      const flick = 0.6 + Math.sin(this.bob * 4) * 0.3;
+      const flick = 0.6 + Math.sin(t * 4) * 0.3;
       g.fillStyle(0xff4400, flick);
       g.fillCircle(-5, 2, 1.6);
       g.fillCircle(5, 2, 1.6);
-    } else {
-      // cemetery crypt — large tombstone with cracks and skull
+    } else if (this.enemyType === 'zombie') {
+      // Fresh grave — earth mound with hand emerging
+      g.fillStyle(0x000000, 0.55);
+      g.fillEllipse(0, 18, 60, 14);
+      g.fillStyle(0x3a2a18, 1);
+      g.fillEllipse(0, 8, 56, 30);
+      g.fillStyle(0x2a1a0c, 1);
+      g.fillEllipse(0, 8, 44, 22);
+      // dirt clumps
+      g.fillStyle(0x4a3a24, 1);
+      g.fillCircle(-18, 14, 4);
+      g.fillCircle(16, 16, 3);
+      g.fillCircle(-2, 18, 3.5);
+      // emerging hand (wiggling)
+      const wig = Math.sin(t * 3) * 1.5;
+      g.fillStyle(0x6a8a4a, 1);
+      g.fillRect(-3 + wig, -6, 6, 14);
+      // fingers
+      g.fillStyle(0x556a3a, 1);
+      g.fillRect(-4 + wig, -10, 1.5, 6);
+      g.fillRect(-1 + wig, -12, 1.5, 8);
+      g.fillRect(2 + wig, -11, 1.5, 7);
+      g.fillRect(4 + wig, -8, 1.5, 5);
+      // weeds
+      g.lineStyle(1, 0x445522, 0.8);
+      g.beginPath(); g.moveTo(-22, 8); g.lineTo(-21, -2); g.strokePath();
+      g.beginPath(); g.moveTo(20, 10); g.lineTo(22, 0); g.strokePath();
+    } else if (this.enemyType === 'skeleton') {
+      // Cemetery crypt — large tombstone with cracks and skull
       g.fillStyle(0x000000, 0.55);
       g.fillEllipse(0, 22, 56, 12);
       g.fillStyle(0x1a1a25, 1);
@@ -864,18 +989,104 @@ export class Nest {
       g.lineStyle(1.5, 0x0a0a14, 0.75);
       g.beginPath(); g.moveTo(-9, -12); g.lineTo(-11, 6); g.strokePath();
       g.beginPath(); g.moveTo(9, -6); g.lineTo(13, 10); g.strokePath();
-      // engraved skull
       g.fillStyle(0x000000, 1);
       g.fillCircle(0, -9, 6.5);
       g.fillRect(-3, -3, 6, 4);
       g.fillStyle(0x6a6a7a, 1);
       g.fillCircle(-2.4, -10, 1.4);
       g.fillCircle(2.4, -10, 1.4);
+    } else if (this.enemyType === 'ghost') {
+      // Haunted standing stone — menhir with ethereal mist
+      g.fillStyle(0x000000, 0.5);
+      g.fillEllipse(0, 22, 50, 12);
+      // ground mist
+      const mistA = 0.25 + Math.sin(t * 2) * 0.1;
+      g.fillStyle(0x88aaff, mistA);
+      g.fillEllipse(0, 18, 64, 14);
+      g.fillEllipse(-12, 12, 26, 10);
+      g.fillEllipse(14, 14, 28, 10);
+      // standing stone (irregular menhir)
+      g.fillStyle(0x2a2a3a, 1);
+      g.fillTriangle(-14, 22, 14, 22, 8, -28);
+      g.fillTriangle(-14, 22, 8, -28, -10, -26);
+      g.fillStyle(0x3a3a4a, 0.95);
+      g.fillRect(-9, -22, 16, 40);
+      // glowing rune
+      const glow = 0.5 + Math.sin(t * 3) * 0.4;
+      g.fillStyle(0x88aaff, glow);
+      g.fillCircle(-2, -8, 2);
+      g.fillRect(-3, -10, 6, 1.5);
+      g.fillRect(-3, -6, 6, 1.5);
+      // floating wisp
+      const wy = Math.sin(t * 2.5) * 4;
+      g.fillStyle(0xc0d8ff, 0.7);
+      g.fillCircle(0, -34 + wy, 4);
+    } else if (this.enemyType === 'knight') {
+      // Mini fortress — square keep with battlements and banner
+      g.fillStyle(0x000000, 0.6);
+      g.fillEllipse(0, 22, 60, 14);
+      // base
+      g.fillStyle(0x4a3a2a, 1);
+      g.fillRect(-22, -10, 44, 32);
+      // stone blocks
+      g.lineStyle(1, 0x2a1a0a, 0.6);
+      g.beginPath(); g.moveTo(-22, 0); g.lineTo(22, 0); g.strokePath();
+      g.beginPath(); g.moveTo(-22, 12); g.lineTo(22, 12); g.strokePath();
+      g.beginPath(); g.moveTo(-8, -10); g.lineTo(-8, 22); g.strokePath();
+      g.beginPath(); g.moveTo(8, -10); g.lineTo(8, 22); g.strokePath();
+      // battlements (crenellations)
+      g.fillStyle(0x4a3a2a, 1);
+      g.fillRect(-22, -16, 8, 6);
+      g.fillRect(-7, -16, 8, 6);
+      g.fillRect(8, -16, 8, 6);
+      g.fillRect(15, -16, 7, 6);
+      // dark windows
+      g.fillStyle(0x000000, 1);
+      g.fillRect(-13, -4, 4, 6);
+      g.fillRect(9, -4, 4, 6);
+      // central door
+      g.fillStyle(0x1a0e04, 1);
+      g.fillRoundedRect(-5, 8, 10, 14, 4);
+      // banner pole + flag (waving)
+      g.fillStyle(0x222222, 1);
+      g.fillRect(-1, -28, 2, 14);
+      const wave = Math.sin(t * 2) * 2;
+      g.fillStyle(0x8a1a1a, 1);
+      g.fillTriangle(1, -28, 13 + wave, -25, 1, -22);
+    } else if (this.enemyType === 'witch') {
+      // Bubbling cauldron with green smoke
+      g.fillStyle(0x000000, 0.6);
+      g.fillEllipse(0, 22, 60, 14);
+      // legs
+      g.fillStyle(0x222222, 1);
+      g.fillRect(-18, 12, 4, 12);
+      g.fillRect(14, 12, 4, 12);
+      g.fillRect(-2, 14, 4, 10);
+      // pot body
+      g.fillStyle(0x111111, 1);
+      g.fillEllipse(0, 6, 52, 36);
+      g.fillStyle(0x2a2a2a, 1);
+      g.fillEllipse(0, 0, 48, 14);
+      // bubbling brew
+      const bubA = 0.8 + Math.sin(t * 4) * 0.2;
+      g.fillStyle(0x33dd44, bubA);
+      g.fillEllipse(0, -2, 42, 10);
+      g.fillStyle(0x66ff77, 1);
+      const bx1 = Math.sin(t * 5) * 8;
+      const bx2 = Math.cos(t * 4) * 10;
+      g.fillCircle(bx1, -3, 2);
+      g.fillCircle(bx2, -1, 1.5);
+      // rising smoke
+      const sa = 0.4 + Math.sin(t * 3) * 0.2;
+      g.fillStyle(0x55cc66, sa);
+      g.fillCircle(-4 + Math.sin(t * 2) * 3, -16 + Math.sin(t) * 2, 5);
+      g.fillCircle(6 + Math.cos(t * 2) * 3, -22 + Math.cos(t) * 2, 6);
+      g.fillCircle(0 + Math.sin(t * 1.5) * 4, -30 + Math.sin(t * 0.8) * 3, 7);
     }
     // hp bar
     g.fillStyle(0x220006, 0.85);
     g.fillRect(-24, -this.size - 16, 48, 5);
-    g.fillStyle(this.type === 'cave' ? 0xff4400 : 0xff0000, 1);
+    g.fillStyle(this.barCol, 1);
     g.fillRect(-24, -this.size - 16, 48 * Math.max(0, this.hp / this.maxHp), 5);
   }
   destroy() { this.gfx.destroy(); }

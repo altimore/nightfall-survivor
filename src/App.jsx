@@ -10,6 +10,8 @@ import BossTitle from './ui/BossTitle.jsx';
 import PauseMenu from './ui/PauseMenu.jsx';
 import Compendium from './ui/Compendium.jsx';
 import InventoryOverlay from './ui/InventoryOverlay.jsx';
+import Shop from './ui/Shop.jsx';
+import { useGamepadActions } from './ui/useGamepad.js';
 
 export default function App() {
   const containerRef = useRef(null);
@@ -22,6 +24,7 @@ export default function App() {
   const [startMode, setStartMode] = useState('normal');
   const [numPlayers, setNumPlayers] = useState(1);
   const [bossAnnounce, setBossAnnounce] = useState(null);
+  const [runStats, setRunStats] = useState(null);
   const [uiScale, setUiScaleState] = useState(() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('uiScale') : null;
     const n = saved ? parseFloat(saved) : 1;
@@ -65,6 +68,7 @@ export default function App() {
   useEffect(() => bus.on('boss:appear', payload => {
     setBossAnnounce({ name: payload.name, key: Date.now() });
   }), []);
+  useEffect(() => bus.on('runStats', setRunStats), []);
 
   useEffect(() => {
     const onKey = e => {
@@ -93,6 +97,22 @@ export default function App() {
     }
   }, [phase]);
 
+  // Gamepad in-game shortcuts: Start = pause, Select/Back = inventory, Y = menu rapide.
+  useGamepadActions({
+    pause: () => {
+      if (phase === 'playing') {
+        bus.emit('pause:set', true);
+        setPhase('paused');
+      }
+    },
+    inventory: () => {
+      if (phase === 'playing') {
+        bus.emit('pause:set', true);
+        setPhase('inventory');
+      }
+    },
+  });
+
   const resumeFromPause = () => {
     bus.emit('pause:set', false);
     setPhase('playing');
@@ -100,6 +120,7 @@ export default function App() {
 
   const start = () => {
     setOptions({ startWeapon, mode: startMode, numPlayers });
+    setRunStats(null);
     if (!gameRef.current) {
       gameRef.current = createGame(containerRef.current);
     } else {
@@ -165,10 +186,18 @@ export default function App() {
       {bossAnnounce && phase === 'playing' && (
         <BossTitle key={bossAnnounce.key} name={bossAnnounce.name} onDone={() => setBossAnnounce(null)} />
       )}
-      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} />}
+      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} onOpenShop={() => setPhase('shop')} />}
       {phase === 'compendium' && <Compendium onClose={() => setPhase('menu')} />}
+      {phase === 'shop' && <Shop onClose={() => setPhase('menu')} />}
       {phase === 'levelup' && (
-        <LevelUpScreen lv={levelUp.lv} choices={levelUp.choices} skills={hud.skills} onPick={pickSkill} />
+        <LevelUpScreen
+          lv={levelUp.lv}
+          choices={levelUp.choices}
+          skills={hud.skills}
+          rerollsLeft={levelUp.rerollsLeft}
+          banishesLeft={levelUp.banishesLeft}
+          onPick={pickSkill}
+        />
       )}
       {phase === 'paused' && (
         <PauseMenu onResume={resumeFromPause} onMenu={goMenu} />
@@ -177,7 +206,7 @@ export default function App() {
         <InventoryOverlay hud={hud} onClose={resumeFromPause} />
       )}
       {(phase === 'dead' || phase === 'victory') && (
-        <EndScreen phase={phase} hud={hud} onRestart={start} onMenu={goMenu} />
+        <EndScreen phase={phase} hud={hud} runStats={runStats} onRestart={start} onMenu={goMenu} />
       )}
     </div>
   );

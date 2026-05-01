@@ -6,9 +6,9 @@ import { useT, getLang, setLang } from '../i18n.js';
 import { playSfx } from '../game/audio.js';
 
 // Starter weapons : utility powers like 'gather' are excluded — they can't kill on their own.
-const WEAPONS = ['dagger', 'sword', 'whip', 'missile', 'floating', 'grenade', 'flamethrower', 'cloud', 'nova', 'lightning', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
+const WEAPONS = ['dagger', 'sword', 'whip', 'missile', 'floating', 'grenade', 'flamethrower', 'cloud', 'nova', 'lightning', 'chargedBolt', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
 
-export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, uiScale, setUiScale, onOpenGuide }) {
+export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, uiScale, setUiScale, onOpenGuide, onOpenShop }) {
   const t = useT();
   const lang = getLang();
   const pickWeapon = id => { if (id !== weapon) playSfx('uimove'); onWeaponChange(id); };
@@ -170,9 +170,12 @@ export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChan
           <div style={{ marginBottom: 18 }}>
             <div style={{ color: '#c77dff', fontSize: '0.91em', letterSpacing: 4, marginBottom: 10 }}>{t('players.label')}</div>
             <div style={{ display: 'flex', gap: '0.5em', justifyContent: 'center', flexWrap: 'wrap' }}>
-              {[1, 2].map(n => {
+              {[1, 2, 3, 4].map(n => {
                 const active = numPlayers === n;
-                const label = n === 1 ? t('players.solo') : t('players.duo');
+                const label = n === 1 ? t('players.solo')
+                            : n === 2 ? t('players.duo')
+                            : n === 3 ? (t('players.trio') || `Trio (3 joueurs)`)
+                            : (t('players.quad') || `Quatuor (4 joueurs)`);
                 return (
                   <button
                     key={n}
@@ -190,9 +193,11 @@ export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChan
                 );
               })}
             </div>
-            {numPlayers === 2 && (
+            {numPlayers >= 2 && (
               <div style={{ color: '#9d6dd0', fontSize: '0.78em', marginTop: 6, letterSpacing: 1 }}>
-                {t('players.duoHint')}
+                {numPlayers === 2 ? t('players.duoHint')
+                 : numPlayers === 3 ? (t('players.trioHint') || 'P1 : WASD · P2 : Flèches · P3 : Manette 1')
+                 : (t('players.quadHint') || 'P1 : WASD · P2 : Flèches · P3 : Manette 1 · P4 : Manette 2')}
               </div>
             )}
           </div>
@@ -218,6 +223,18 @@ export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChan
                 cursor: 'pointer', borderRadius: 3,
               }}
             >{t('compendium.open')}</button>
+          )}
+          {onOpenShop && (
+            <button
+              onClick={() => { playSfx('uipick'); onOpenShop(); }}
+              style={{
+                padding: '0.55em 1.4em',
+                background: 'transparent',
+                border: '1px solid #ffd96666', color: '#ffd966',
+                fontFamily: "'Cinzel',serif", fontSize: '0.95em', letterSpacing: 3,
+                cursor: 'pointer', borderRadius: 3,
+              }}
+            >💰 {t('shop.open') || 'BOUTIQUE'}</button>
           )}
         </div>
 

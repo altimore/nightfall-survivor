@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
-import { SKILLS, ETYPES, ITEMS } from '../game/data.js';
+import { useEffect, useState } from 'react';
+import { SKILLS, ETYPES, ITEMS, EVOLUTIONS } from '../game/data.js';
+import { NEST_CONFIG } from '../game/entities.js';
 import { useT } from '../i18n.js';
 import { useGamepadActions } from './useGamepad.js';
 import { playSfx } from '../game/audio.js';
@@ -10,8 +11,17 @@ const hexToRgb = h => {
   return `#${v}`;
 };
 
+const TABS = [
+  { id: 'weapons',    label: 'compendium.weapons',    icon: '⚔', color: '#c77dff' },
+  { id: 'passives',   label: 'compendium.passives',   icon: '🛡', color: '#80ffdb' },
+  { id: 'evolutions', label: 'compendium.evolutions', icon: '✦', color: '#ffd966' },
+  { id: 'enemies',    label: 'compendium.enemies',    icon: '☠', color: '#ff4d6d' },
+  { id: 'items',      label: 'compendium.items',      icon: '🧪', color: '#ffe066' },
+];
+
 export default function Compendium({ onClose }) {
   const t = useT();
+  const [tab, setTab] = useState('weapons');
 
   useEffect(() => {
     const onKey = e => {
@@ -19,6 +29,22 @@ export default function Compendium({ onClose }) {
         e.preventDefault();
         playSfx('uipick');
         onClose();
+      } else if (e.key === 'ArrowRight' || e.key === 'd') {
+        e.preventDefault();
+        setTab(cur => {
+          const i = TABS.findIndex(x => x.id === cur);
+          const n = TABS[(i + 1) % TABS.length].id;
+          if (n !== cur) playSfx('uimove');
+          return n;
+        });
+      } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'q') {
+        e.preventDefault();
+        setTab(cur => {
+          const i = TABS.findIndex(x => x.id === cur);
+          const n = TABS[(i - 1 + TABS.length) % TABS.length].id;
+          if (n !== cur) playSfx('uimove');
+          return n;
+        });
       }
     };
     window.addEventListener('keydown', onKey);
@@ -27,12 +53,23 @@ export default function Compendium({ onClose }) {
 
   useGamepadActions({
     back: () => { playSfx('uipick'); onClose(); },
+    left: () => setTab(cur => {
+      const i = TABS.findIndex(x => x.id === cur);
+      return TABS[(i - 1 + TABS.length) % TABS.length].id;
+    }),
+    right: () => setTab(cur => {
+      const i = TABS.findIndex(x => x.id === cur);
+      return TABS[(i + 1) % TABS.length].id;
+    }),
   });
 
   const weapons = Object.entries(SKILLS).filter(([, s]) => s.type === 'weapon');
   const passives = Object.entries(SKILLS).filter(([, s]) => s.type === 'passive');
   const enemies = Object.entries(ETYPES);
   const items = Object.entries(ITEMS);
+  const evolutions = Object.entries(EVOLUTIONS);
+
+  const activeTab = TABS.find(x => x.id === tab) || TABS[0];
 
   return (
     <div style={{
@@ -49,7 +86,7 @@ export default function Compendium({ onClose }) {
         position: 'relative',
         width: '100%', maxWidth: 1100,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.2em', flexWrap: 'wrap', gap: '0.5em' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.9em', flexWrap: 'wrap', gap: '0.5em' }}>
           <div style={{
             fontFamily: "'Cinzel Decorative',serif", fontSize: '2.5em',
             color: '#c77dff', textShadow: '0 0 30px #7b2fbe',
@@ -67,34 +104,113 @@ export default function Compendium({ onClose }) {
           >← {t('compendium.back')}</button>
         </div>
 
-        <Section title={`⚔ ${t('compendium.weapons')}`} color="#c77dff">
-          {weapons.map(([id, sk]) => (
-            <SkillCard key={id} id={id} sk={sk} t={t} />
-          ))}
-        </Section>
+        {/* Tab bar */}
+        <div style={{
+          display: 'flex', gap: '0.5em', flexWrap: 'wrap',
+          marginBottom: '1.1em',
+          borderBottom: '1px solid rgba(199,125,255,0.25)',
+          paddingBottom: '0.55em',
+        }}>
+          {TABS.map(x => {
+            const active = x.id === tab;
+            return (
+              <button
+                key={x.id}
+                onClick={() => { if (tab !== x.id) playSfx('uimove'); setTab(x.id); }}
+                onMouseDown={e => e.preventDefault()}
+                tabIndex={-1}
+                style={{
+                  padding: '0.55em 1.1em',
+                  background: active ? `linear-gradient(135deg,${x.color}33,${x.color}10)` : 'rgba(8,0,22,0.6)',
+                  border: `1px solid ${active ? x.color : x.color + '33'}`,
+                  color: active ? x.color : '#9d4edd',
+                  fontFamily: "'Cinzel',serif",
+                  fontSize: '0.9em', letterSpacing: 3,
+                  cursor: 'pointer', borderRadius: 4,
+                  boxShadow: active ? `0 0 18px ${x.color}55` : 'none',
+                  transform: active ? 'translateY(-1px)' : 'none',
+                  transition: 'all .12s',
+                }}
+              >{x.icon} {t(x.label) || x.id}</button>
+            );
+          })}
+        </div>
 
-        <Section title={`🛡 ${t('compendium.passives')}`} color="#80ffdb">
-          {passives.map(([id, sk]) => (
-            <SkillCard key={id} id={id} sk={sk} t={t} />
-          ))}
-        </Section>
-
-        <Section title={`☠ ${t('compendium.enemies')}`} color="#ff4d6d">
-          {enemies.map(([id, et]) => (
-            <EnemyCard key={id} id={id} et={et} t={t} />
-          ))}
-        </Section>
-
-        <Section title={`🧪 ${t('compendium.items')}`} color="#ffe066">
-          {items.map(([id, it]) => (
-            <ItemCard key={id} it={it} />
-          ))}
-        </Section>
+        {/* Tab content */}
+        <div>
+          {tab === 'weapons' && (
+            <SectionGrid color={activeTab.color}>
+              {weapons.map(([id, sk]) => <SkillCard key={id} id={id} sk={sk} t={t} />)}
+            </SectionGrid>
+          )}
+          {tab === 'passives' && (
+            <SectionGrid color={activeTab.color}>
+              {passives.map(([id, sk]) => <SkillCard key={id} id={id} sk={sk} t={t} />)}
+            </SectionGrid>
+          )}
+          {tab === 'evolutions' && (
+            <SectionGrid color={activeTab.color}>
+              {evolutions.map(([id, evo]) => <EvolutionCard key={id} id={id} evo={evo} t={t} />)}
+            </SectionGrid>
+          )}
+          {tab === 'enemies' && (
+            <SectionGrid color={activeTab.color}>
+              {enemies.map(([id, et]) => <EnemyCard key={id} id={id} et={et} t={t} />)}
+            </SectionGrid>
+          )}
+          {tab === 'items' && (
+            <SectionGrid color={activeTab.color}>
+              {items.map(([id, it]) => <ItemCard key={id} it={it} />)}
+            </SectionGrid>
+          )}
+        </div>
 
         <div style={{ marginTop: '1.5em', textAlign: 'center', color: '#b69ad8', fontSize: '0.82em', letterSpacing: 2 }}>
-          {t('compendium.hint')}
+          {t('compendium.hint')} · ← → pour changer d'onglet
         </div>
       </div>
+    </div>
+  );
+}
+
+function SectionGrid({ children }) {
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(16em, 1fr))',
+      gap: '0.7em',
+    }}>{children}</div>
+  );
+}
+
+function EvolutionCard({ id, evo, t }) {
+  const reqSkill = SKILLS[evo.requires];
+  const wepSkill = SKILLS[id];
+  return (
+    <div style={{
+      background: 'linear-gradient(160deg,rgba(60,40,5,.92),rgba(20,12,2,.92))',
+      border: `1px solid ${evo.color}66`,
+      borderRadius: 6,
+      padding: '0.85em 1em',
+      boxShadow: `0 0 14px ${evo.color}22`,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5em', marginBottom: '0.45em' }}>
+        <span style={{ fontSize: '1.7em' }}>{evo.icon}</span>
+        <span style={{ color: evo.color, fontSize: '1em', letterSpacing: 1, flex: 1 }}>{evo.name}</span>
+      </div>
+      <div style={{ fontSize: '0.78em', color: '#b89ec4', marginBottom: '0.4em', letterSpacing: 1 }}>
+        <span style={{ color: wepSkill?.color }}>{wepSkill?.icon || ''} {t ? t(`skills.${id}`) : ''}</span>
+        <span style={{ color: '#666', margin: '0 0.4em' }}>+</span>
+        <span style={{ color: reqSkill?.color }}>{reqSkill?.icon || ''} {t ? t(`skills.${evo.requires}`) : ''}</span>
+      </div>
+      <div style={{ color: '#ffd966cc', fontSize: '0.85em', lineHeight: 1.5 }}>{evo.desc}</div>
+      <div style={{
+        marginTop: '0.55em', fontSize: '0.78em', letterSpacing: 2,
+        color: '#ffd966',
+        border: '1px solid #ffd96644',
+        borderRadius: 20, padding: '0.18em 0.7em',
+        display: 'inline-block',
+      }}>✦ MYTHIQUE</div>
     </div>
   );
 }
@@ -151,6 +267,7 @@ function EnemyCard({ id, et, t }) {
     phase: 'Fantomatique', charge: 'Charge', kite: 'Kite',
     boss: 'Boss',
   }[et.behavior] || et.behavior;
+  const nest = NEST_CONFIG[id];
   return (
     <div style={{
       background: 'rgba(8,0,22,0.85)',
@@ -170,6 +287,21 @@ function EnemyCard({ id, et, t }) {
           flexShrink: 0,
         }}>{et.icon}</div>
         <span style={{ color: hexToRgb(et.col), fontSize: '1em', letterSpacing: 1 }}>{et.label}</span>
+        {nest && (
+          <div style={{
+            marginLeft: 'auto',
+            display: 'flex', alignItems: 'center', gap: '0.4em',
+            padding: '0.18em 0.55em',
+            background: 'rgba(20,8,30,0.7)',
+            border: `1px dashed ${hexToRgb(et.col)}55`,
+            borderRadius: 4,
+            fontSize: '0.78em',
+            color: hexToRgb(et.col),
+          }}>
+            <span style={{ fontSize: '1.15em' }}>{nest.icon}</span>
+            <span style={{ letterSpacing: 1 }}>{nest.label}</span>
+          </div>
+        )}
         {isBoss && <span style={{ color: '#ff4400', fontSize: '0.82em', letterSpacing: 2, marginLeft: 'auto' }}>BOSS</span>}
       </div>
       <div style={{ color: '#b69ad8', fontSize: '0.82em', lineHeight: 1.5 }}>
@@ -178,6 +310,11 @@ function EnemyCard({ id, et, t }) {
         {wave >= 0 && (
           <div style={{ color: '#7b46c4', fontSize: '0.82em', marginTop: '0.2em' }}>
             {t('compendium.unlocksAt')} {wave}{t('compendium.seconds')}
+          </div>
+        )}
+        {nest && (
+          <div style={{ color: '#9d6ad8', fontSize: '0.78em', marginTop: '0.35em', borderTop: `1px solid ${hexToRgb(et.col)}33`, paddingTop: '0.25em' }}>
+            🏚 Nid · <span style={{ color: '#ff8a8a' }}>{nest.hp} PV</span> · spawn toutes les <span style={{ color: '#88ddff' }}>{nest.interval}s</span>
           </div>
         )}
       </div>

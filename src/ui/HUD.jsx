@@ -25,7 +25,12 @@ export default function HUD({ muted, onToggleMute }) {
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.55em 0.9em' }}>
         <div style={{ width: '15em' }}>
-          <div style={{ fontSize: '0.91em', color: '#ff4d6d', letterSpacing: 2, marginBottom: '0.25em' }}>❤ {s.hp}/{s.maxHp}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25em' }}>
+            <span style={{ fontSize: '0.91em', color: '#ff4d6d', letterSpacing: 2 }}>❤ {s.hp}/{s.maxHp}</span>
+            {typeof s.dps === 'number' && s.dps > 0 && (
+              <span style={{ fontSize: '0.78em', color: '#ffe066', letterSpacing: 1 }} title="Dégâts par seconde">⚡ {s.dps} DPS</span>
+            )}
+          </div>
           <div style={{ height: '0.65em', background: '#1a0010', borderRadius: 4, overflow: 'hidden' }}>
             <div style={{
               height: '100%',
@@ -59,11 +64,15 @@ export default function HUD({ muted, onToggleMute }) {
               }}/>
             </div>
           </div>
-          <button onClick={onToggleMute} style={{
-            background: 'transparent', border: '1px solid #3c096c',
-            borderRadius: 4, color: muted ? '#4a1a6a' : '#c77dff',
-            fontSize: '1.27em', cursor: 'pointer', padding: '0.15em 0.55em', flexShrink: 0,
-          }}>{muted ? '🔇' : '🔊'}</button>
+          <button
+            onClick={e => { onToggleMute(); e.currentTarget.blur(); }}
+            onMouseDown={e => e.preventDefault()}
+            tabIndex={-1}
+            style={{
+              background: 'transparent', border: '1px solid #3c096c',
+              borderRadius: 4, color: muted ? '#4a1a6a' : '#c77dff',
+              fontSize: '1.27em', cursor: 'pointer', padding: '0.15em 0.55em', flexShrink: 0,
+            }}>{muted ? '🔇' : '🔊'}</button>
         </div>
       </div>
       {otherPlayers.length > 0 && (
