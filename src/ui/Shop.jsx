@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { META_UPGRADES, getMetaState, buyUpgrade, resetMeta } from '../game/meta.js';
+import { ACHIEVEMENTS, getUnlockedSet } from '../game/achievements.js';
 import { useT } from '../i18n.js';
 import { useGamepadActions } from './useGamepad.js';
 import { playSfx } from '../game/audio.js';
@@ -138,6 +139,7 @@ export default function Shop({ onClose }) {
         </div>
 
         <GlobalStatsPanel state={state} />
+        <AchievementsPanel />
 
         <div style={{ marginTop: '1em', textAlign: 'center' }}>
           <button
@@ -165,6 +167,53 @@ export default function Shop({ onClose }) {
         <div style={{ marginTop: '0.8em', textAlign: 'center', color: '#b69ad8', fontSize: '0.82em', letterSpacing: 2 }}>
           {t('shop.hint') || 'L\'or se gagne en tuant des ennemis · ÉCHAP / B pour fermer'}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function AchievementsPanel() {
+  const unlocked = getUnlockedSet();
+  const entries = Object.entries(ACHIEVEMENTS);
+  const total = entries.length;
+  const got = entries.filter(([id]) => unlocked.has(id)).length;
+  return (
+    <div style={{
+      marginTop: '1em',
+      background: 'rgba(8,0,22,0.78)',
+      border: '1px solid rgba(255,217,102,0.35)',
+      borderRadius: 6,
+      padding: '0.9em 1.1em',
+    }}>
+      <div style={{
+        color: '#ffd966', fontSize: '0.91em', letterSpacing: 4,
+        textAlign: 'center', marginBottom: '0.7em',
+      }}>✦ SUCCÈS · {got}/{total}</div>
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(13em, 1fr))',
+        gap: '0.45em',
+      }}>
+        {entries.map(([id, def]) => {
+          const ok = unlocked.has(id);
+          return (
+            <div key={id} style={{
+              display: 'flex', gap: '0.5em', alignItems: 'center',
+              padding: '0.4em 0.6em',
+              background: ok ? 'rgba(60,40,5,0.5)' : 'rgba(20,8,30,0.4)',
+              border: `1px solid ${ok ? '#ffd96677' : '#3a1d4a55'}`,
+              borderRadius: 4,
+              opacity: ok ? 1 : 0.5,
+            }}>
+              <span style={{ fontSize: '1.4em', filter: ok ? 'none' : 'grayscale(1)' }}>{def.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: ok ? '#ffd966' : '#9d4edd', fontSize: '0.85em', letterSpacing: 1 }}>
+                  {ok ? def.name : '???'}
+                </div>
+                <div style={{ color: '#b89ec4', fontSize: '0.72em' }}>{def.desc}</div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

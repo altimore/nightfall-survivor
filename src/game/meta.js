@@ -25,10 +25,12 @@ const DEFAULT_STATE = {
     totalRuns: 0,
     totalVictories: 0,
     totalGoldEarned: 0,
+    totalBossKills: 0,
     bestTime: 0,
     bestKills: 0,
     bestRunGold: 0,
     bestCombo: 0,
+    bestEndlessTier: 0,
     totalEvolutions: 0,
   },
 };
@@ -58,7 +60,7 @@ export function saveMeta(state) {
   } catch (_) {}
 }
 
-// Record a finished run's stats. `runData` shape: { kills, time, goldEarned, combo, victory, evolutions }
+// Record a finished run's stats. `runData` shape: { kills, time, goldEarned, combo, victory, evolutions, bossKills, endlessTier }
 export function recordRun(runData) {
   const state = loadMeta();
   const s = { ...DEFAULT_STATE.stats, ...(state.stats || {}) };
@@ -66,11 +68,13 @@ export function recordRun(runData) {
   s.totalKills += runData.kills || 0;
   s.totalGoldEarned += runData.goldEarned || 0;
   s.totalEvolutions += runData.evolutions || 0;
+  s.totalBossKills += runData.bossKills || 0;
   if (runData.victory) s.totalVictories += 1;
   if ((runData.time || 0) > s.bestTime) s.bestTime = runData.time;
   if ((runData.kills || 0) > s.bestKills) s.bestKills = runData.kills;
   if ((runData.goldEarned || 0) > s.bestRunGold) s.bestRunGold = runData.goldEarned;
   if ((runData.combo || 0) > s.bestCombo) s.bestCombo = runData.combo;
+  if ((runData.endlessTier || 0) > (s.bestEndlessTier || 0)) s.bestEndlessTier = runData.endlessTier;
   state.stats = s;
   saveMeta(state);
   return s;

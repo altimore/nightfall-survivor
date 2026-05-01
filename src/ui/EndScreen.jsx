@@ -79,6 +79,7 @@ export default function EndScreen({ phase, hud, runStats, onRestart, onMenu }) {
         </div>
       )}
       <DamageReport runStats={runStats} t={t} />
+      <DpsChart runStats={runStats} />
       {win && (
         <button
           onClick={() => { playSfx('uipick'); bus.emit('endless:continue'); }}
@@ -130,6 +131,46 @@ export default function EndScreen({ phase, hud, runStats, onRestart, onMenu }) {
           transition: 'all .15s',
           position: 'relative',
         }}>{t('end.menu')}</button>
+    </div>
+  );
+}
+
+function DpsChart({ runStats }) {
+  const hist = runStats?.dpsHistory;
+  if (!Array.isArray(hist) || hist.length < 3) return null;
+  const w = 280, h = 60;
+  const max = Math.max(1, ...hist.map(p => p.dps));
+  const points = hist.map((p, i) => {
+    const x = (i / (hist.length - 1)) * (w - 6) + 3;
+    const y = h - 4 - (p.dps / max) * (h - 12);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const path = `M ${points.join(' L ')}`;
+  const areaPath = `${path} L ${(w - 3).toFixed(1)},${(h - 4).toFixed(1)} L ${(3).toFixed(1)},${(h - 4).toFixed(1)} Z`;
+  const peakDps = Math.max(...hist.map(p => p.dps));
+  return (
+    <div style={{
+      width: 'min(28em, 92vw)',
+      marginBottom: 18,
+      padding: '0.7em 1em',
+      background: 'rgba(8,0,22,0.78)',
+      border: '1px solid rgba(255,224,102,0.30)',
+      borderRadius: 6,
+      position: 'relative',
+    }}>
+      <div style={{ color: '#ffe066', fontSize: '0.82em', letterSpacing: 3, textAlign: 'center', marginBottom: '0.3em' }}>
+        ⚡ DPS AU FIL DU TEMPS · pic {peakDps.toLocaleString()}
+      </div>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} style={{ display: 'block' }}>
+        <defs>
+          <linearGradient id="dpsGradient" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#ffe066" stopOpacity="0.6"/>
+            <stop offset="100%" stopColor="#ffe066" stopOpacity="0.05"/>
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill="url(#dpsGradient)" />
+        <path d={path} fill="none" stroke="#ffe066" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/>
+      </svg>
     </div>
   );
 }

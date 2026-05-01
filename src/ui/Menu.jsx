@@ -9,7 +9,7 @@ import { playSfx } from '../game/audio.js';
 // Starter weapons : utility powers like 'gather' are excluded — they can't kill on their own.
 const WEAPONS = ['dagger', 'sword', 'whip', 'missile', 'floating', 'grenade', 'flamethrower', 'cloud', 'nova', 'lightning', 'chargedBolt', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
 
-export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, character, onCharacterChange, uiScale, setUiScale, onOpenGuide, onOpenShop }) {
+export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, character, onCharacterChange, uiScale, setUiScale, onOpenGuide, onOpenShop }) {
   const t = useT();
   const lang = getLang();
   const pickWeapon = id => { if (id !== weapon) playSfx('uimove'); onWeaponChange(id); };
@@ -276,6 +276,21 @@ export default function Menu({ onStart, weapon, onWeaponChange, mode, onModeChan
                 cursor: 'pointer', borderRadius: 3,
               }}
             >💰 {t('shop.open') || 'BOUTIQUE'}</button>
+          )}
+          {onStartDaily && (
+            <button
+              onClick={() => { playSfx('uipick'); onStartDaily(); }}
+              onMouseDown={e => e.preventDefault()}
+              tabIndex={-1}
+              style={{
+                padding: '0.55em 1.4em',
+                background: 'linear-gradient(135deg,#5a1a8a,#3a0a5a)',
+                border: '1px solid #c77dff', color: '#e0aaff',
+                fontFamily: "'Cinzel',serif", fontSize: '0.95em', letterSpacing: 3,
+                cursor: 'pointer', borderRadius: 3,
+                boxShadow: '0 0 18px rgba(199,125,255,0.4)',
+              }}
+            >🗓 {t('menu.daily') || 'DÉFI DU JOUR'}</button>
           )}
         </div>
 

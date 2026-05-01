@@ -7,6 +7,8 @@ import { bus } from '../bus.js';
 import { getOptions } from '../PhaserGame.js';
 import { applyMetaToPlayer, addGold, recordRun } from '../meta.js';
 import { CHARACTERS } from '../characters.js';
+import { checkAchievements, ACHIEVEMENTS } from '../achievements.js';
+import { recordDaily } from '../daily.js';
 
 const BOSS_NAMES = [
   "L'Émissaire des Ténèbres",
@@ -175,6 +177,9 @@ export default class GameScene extends Phaser.Scene {
     }
     // Track gold accumulated this run (added to permanent total on game over/victory).
     this.runGold = 0;
+    this.bossKills = 0;
+    this.dpsHistory = [];
+    this.dpsSampleT = 0;
     this.player = this.players[0];
     this.enemies = [];
     this.projectiles = [];
@@ -441,14 +446,26 @@ export default class GameScene extends Phaser.Scene {
     // Record stats for the run (kills, time, gold, combo, evolutions count, victory flag)
     const evolutionsCount = this.players.reduce((acc, pl) => acc + ((pl.evolved instanceof Set) ? pl.evolved.size : 0), 0);
     const victory = !!this.victoryClaimed;
-    recordRun({
+    const runRecord = {
       kills: this.kills,
       time: Math.floor(this.elapsed),
       goldEarned,
       combo: this.comboPeak || 0,
       evolutions: evolutionsCount,
+      bossKills: this.bossKills || 0,
+      endlessTier: this.endlessTier || 0,
       victory,
-    });
+    };
+    const updatedStats = recordRun(runRecord);
+    // Daily challenge tracking
+    const opts = getOptions();
+    if (opts?.daily) recordDaily(runRecord);
+    // Check for newly-unlocked achievements
+    const newAchievements = checkAchievements(updatedStats, runRecord);
+    for (const aId of newAchievements) {
+      const def = ACHIEVEMENTS[aId];
+      if (def) bus.emit('achievement', { id: aId, name: def.name, icon: def.icon, desc: def.desc });
+    }
     bus.emit('runStats', {
       damageStats: { ...(this.damageStats || {}) },
       kills: this.kills,
@@ -457,6 +474,7 @@ export default class GameScene extends Phaser.Scene {
       goldEarned,
       goldTotal: totalGold,
       bestCombo: this.comboPeak || 0,
+      dpsHistory: [...(this.dpsHistory || [])],
       players: playersInfo,
     });
   }
@@ -660,6 +678,16 @@ export default class GameScene extends Phaser.Scene {
     if (this.comboT > 0) {
       this.comboT -= dt;
       if (this.comboT <= 0) { this.comboCount = 0; this.comboT = 0; }
+    }
+
+    // ── Sample DPS every ~3 seconds for the end-of-run chart.
+    this.dpsSampleT = (this.dpsSampleT || 0) - dt;
+    if (this.dpsSampleT <= 0) {
+      this.dpsSampleT = 3;
+      const dps = Math.round(this.computeDps ? this.computeDps() : 0);
+      this.dpsHistory.push({ t: Math.floor(this.elapsed), dps });
+      // Cap to avoid unbounded growth on endless
+      if (this.dpsHistory.length > 200) this.dpsHistory.shift();
     }
 
     // ── Dynamic difficulty ─ scale spawn rate based on player state.
@@ -929,6 +957,7 @@ export default class GameScene extends Phaser.Scene {
             this.shake(0.012, 280);
             this.hitstop = 0.08;
             this.bossSeen.delete(e);
+            this.bossKills = (this.bossKills || 0) + 1;
             // Boss death drops a "treasure chest" — multiple loot items spread out
             this.dropBossChest(e.x, e.y);
           } else if (e.elite) {

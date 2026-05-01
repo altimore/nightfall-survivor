@@ -26,6 +26,7 @@ export default function App() {
   const [numPlayers, setNumPlayers] = useState(1);
   const [bossAnnounce, setBossAnnounce] = useState(null);
   const [runStats, setRunStats] = useState(null);
+  const [achievementQueue, setAchievementQueue] = useState([]);
   const [uiScale, setUiScaleState] = useState(() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('uiScale') : null;
     const n = saved ? parseFloat(saved) : 1;
@@ -70,6 +71,18 @@ export default function App() {
     setBossAnnounce({ name: payload.name, key: Date.now() });
   }), []);
   useEffect(() => bus.on('runStats', setRunStats), []);
+  useEffect(() => bus.on('achievement', a => {
+    setAchievementQueue(q => [...q, { ...a, key: Date.now() + Math.random() }]);
+  }), []);
+
+  // Auto-dismiss the oldest toast after 4.5s
+  useEffect(() => {
+    if (achievementQueue.length === 0) return;
+    const tid = setTimeout(() => {
+      setAchievementQueue(q => q.slice(1));
+    }, 4500);
+    return () => clearTimeout(tid);
+  }, [achievementQueue]);
 
   useEffect(() => {
     const onKey = e => {
@@ -120,7 +133,7 @@ export default function App() {
   };
 
   const start = () => {
-    setOptions({ startWeapon, mode: startMode, numPlayers, character });
+    setOptions({ startWeapon, mode: startMode, numPlayers, character, daily: false });
     setRunStats(null);
     if (!gameRef.current) {
       gameRef.current = createGame(containerRef.current);
@@ -128,6 +141,21 @@ export default function App() {
       bus.emit('game:restart');
     }
     setPhase('playing');
+  };
+
+  const startDaily = () => {
+    // Lazy import to avoid bundling impact at top
+    import('./game/daily.js').then(({ getDailyConfig }) => {
+      const cfg = getDailyConfig();
+      setOptions({ startWeapon: cfg.weapon, mode: cfg.mode, numPlayers: 1, character: cfg.character, daily: true });
+      setRunStats(null);
+      if (!gameRef.current) {
+        gameRef.current = createGame(containerRef.current);
+      } else {
+        bus.emit('game:restart');
+      }
+      setPhase('playing');
+    });
   };
 
   const goMenu = () => {
@@ -187,7 +215,7 @@ export default function App() {
       {bossAnnounce && phase === 'playing' && (
         <BossTitle key={bossAnnounce.key} name={bossAnnounce.name} onDone={() => setBossAnnounce(null)} />
       )}
-      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} character={character} onCharacterChange={setCharacter} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} onOpenShop={() => setPhase('shop')} />}
+      {phase === 'menu' && <Menu onStart={start} onStartDaily={startDaily} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} character={character} onCharacterChange={setCharacter} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} onOpenShop={() => setPhase('shop')} />}
       {phase === 'compendium' && <Compendium onClose={() => setPhase('menu')} />}
       {phase === 'shop' && <Shop onClose={() => setPhase('menu')} />}
       {phase === 'levelup' && (
@@ -208,6 +236,35 @@ export default function App() {
       )}
       {(phase === 'dead' || phase === 'victory') && (
         <EndScreen phase={phase} hud={hud} runStats={runStats} onRestart={start} onMenu={goMenu} />
+      )}
+      {achievementQueue.length > 0 && (
+        <div style={{
+          position: 'absolute', right: 14, bottom: 14, zIndex: 35,
+          display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none',
+        }}>
+          {achievementQueue.slice(0, 3).map((a, i) => (
+            <div key={a.key} style={{
+              minWidth: '15em', maxWidth: '20em',
+              padding: '0.7em 1em',
+              background: 'linear-gradient(135deg,rgba(60,40,5,0.95),rgba(20,12,2,0.95))',
+              border: '1px solid #ffd966',
+              borderRadius: 6,
+              boxShadow: '0 0 22px rgba(255,217,102,0.45)',
+              color: '#ffd966',
+              animation: i === 0 ? 'achievSlide 0.35s ease-out' : 'none',
+            }}>
+              <div style={{ fontSize: '0.78em', letterSpacing: 3, color: '#ffd966', marginBottom: 3 }}>✦ SUCCÈS DÉBLOQUÉ</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5em' }}>
+                <span style={{ fontSize: '1.7em' }}>{a.icon}</span>
+                <div>
+                  <div style={{ fontFamily: "'Cinzel',serif", fontSize: '1em', letterSpacing: 1 }}>{a.name}</div>
+                  <div style={{ fontSize: '0.78em', color: '#d8b8a4' }}>{a.desc}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+          <style>{`@keyframes achievSlide { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+        </div>
       )}
     </div>
   );
