@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createGame, setOptions } from './game/PhaserGame.js';
 import { bus } from './game/bus.js';
-import { setMuted, stopMusic, startMusic } from './game/audio.js';
+import { setMuted, stopMusic, startMusic, initAudio } from './game/audio.js';
 import HUD from './ui/HUD.jsx';
 import Menu from './ui/Menu.jsx';
 import EndScreen from './ui/EndScreen.jsx';
 import LevelUpScreen from './ui/LevelUpScreen.jsx';
 import BossTitle from './ui/BossTitle.jsx';
+import PauseMenu from './ui/PauseMenu.jsx';
 
 export default function App() {
   const containerRef = useRef(null);
@@ -17,6 +18,39 @@ export default function App() {
   const [levelUp, setLevelUp] = useState({ lv: 1, choices: [] });
   const [startWeapon, setStartWeapon] = useState('dagger');
   const [bossAnnounce, setBossAnnounce] = useState(null);
+  const [uiScale, setUiScaleState] = useState(() => {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('uiScale') : null;
+    const n = saved ? parseFloat(saved) : 1;
+    return Number.isFinite(n) && n >= 0.6 && n <= 2 ? n : 1;
+  });
+  const setUiScale = v => {
+    const clamped = Math.max(0.6, Math.min(2, v));
+    setUiScaleState(clamped);
+    try { localStorage.setItem('uiScale', String(clamped)); } catch (_) {}
+  };
+  const audioReadyRef = useRef(false);
+
+  useEffect(() => {
+    const onGesture = () => {
+      initAudio();
+      audioReadyRef.current = true;
+      if (phase === 'menu') startMusic('menu');
+      document.removeEventListener('click', onGesture);
+      document.removeEventListener('keydown', onGesture);
+    };
+    document.addEventListener('click', onGesture);
+    document.addEventListener('keydown', onGesture);
+    return () => {
+      document.removeEventListener('click', onGesture);
+      document.removeEventListener('keydown', onGesture);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (phase === 'menu' && audioReadyRef.current) {
+      startMusic('menu');
+    }
+  }, [phase]);
 
   useEffect(() => bus.on('phase', setPhase), []);
   useEffect(() => bus.on('hud:update', setHud), []);
@@ -27,6 +61,32 @@ export default function App() {
   useEffect(() => bus.on('boss:appear', payload => {
     setBossAnnounce({ name: payload.name, key: Date.now() });
   }), []);
+
+  useEffect(() => {
+    const onKey = e => {
+      if (e.key !== 'Escape') return;
+      if (phase === 'playing') {
+        e.preventDefault();
+        bus.emit('pause:set', true);
+        setPhase('paused');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [phase]);
+
+  // Blur any focused control when entering gameplay so arrow-key focus traversal
+  // (default browser behaviour on focused <button>s) doesn't steal movement input.
+  useEffect(() => {
+    if (phase === 'playing' && document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+  }, [phase]);
+
+  const resumeFromPause = () => {
+    bus.emit('pause:set', false);
+    setPhase('playing');
+  };
 
   const start = () => {
     setOptions({ startWeapon });
@@ -68,11 +128,12 @@ export default function App() {
       height: '100vh',
       position: 'relative',
       overflow: 'hidden',
-      fontSize: 'clamp(14px, 1.4vmin, 32px)',
+      fontSize: `clamp(${(14 * uiScale).toFixed(1)}px, ${(1.4 * uiScale).toFixed(2)}vmin, ${(32 * uiScale).toFixed(0)}px)`,
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cinzel+Decorative:wght@700&display=swap');
         *{box-sizing:border-box} button:focus{outline:none}
+        button, input, select, textarea { font: inherit; color: inherit; }
         html, body, #root { width: 100%; height: 100%; }
       `}</style>
 
@@ -93,9 +154,12 @@ export default function App() {
       {bossAnnounce && phase === 'playing' && (
         <BossTitle key={bossAnnounce.key} name={bossAnnounce.name} onDone={() => setBossAnnounce(null)} />
       )}
-      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} />}
+      {phase === 'menu' && <Menu onStart={start} weapon={startWeapon} onWeaponChange={setStartWeapon} uiScale={uiScale} setUiScale={setUiScale} />}
       {phase === 'levelup' && (
         <LevelUpScreen lv={levelUp.lv} choices={levelUp.choices} skills={hud.skills} onPick={pickSkill} />
+      )}
+      {phase === 'paused' && (
+        <PauseMenu onResume={resumeFromPause} onMenu={goMenu} />
       )}
       {(phase === 'dead' || phase === 'victory') && (
         <EndScreen phase={phase} hud={hud} onRestart={start} onMenu={goMenu} />

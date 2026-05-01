@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { SKILLS } from '../game/data.js';
 import { useGamepadActions } from './useGamepad.js';
+import { useT } from '../i18n.js';
+import { playSfx } from '../game/audio.js';
 
 const AUTO_PICK_S = 10;
 
 export default function LevelUpScreen({ lv, choices, skills, onPick }) {
+  const t = useT();
   const [remaining, setRemaining] = useState(AUTO_PICK_S);
   const [selected, setSelected] = useState(0);
   const pickedRef = useRef(false);
@@ -40,16 +43,26 @@ export default function LevelUpScreen({ lv, choices, skills, onPick }) {
     return () => cancelAnimationFrame(rafId);
   }, [choices]);
 
+  const move = delta => {
+    const n = choicesRef.current.length;
+    if (!n) return;
+    setSelected(s => {
+      const next = (s + delta + n) % n;
+      if (next !== s) playSfx('uimove');
+      return next;
+    });
+  };
+
   useEffect(() => {
     const onKey = e => {
       const n = choicesRef.current.length;
       if (!n) return;
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'q') {
         e.preventDefault();
-        setSelected(s => (s - 1 + n) % n);
+        move(-1);
       } else if (e.key === 'ArrowRight' || e.key === 'd') {
         e.preventDefault();
-        setSelected(s => (s + 1) % n);
+        move(1);
       } else if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         const id = choicesRef.current[selectedRef.current];
@@ -68,14 +81,8 @@ export default function LevelUpScreen({ lv, choices, skills, onPick }) {
   }, []);
 
   useGamepadActions({
-    left: () => {
-      const n = choicesRef.current.length;
-      if (n) setSelected(s => (s - 1 + n) % n);
-    },
-    right: () => {
-      const n = choicesRef.current.length;
-      if (n) setSelected(s => (s + 1) % n);
-    },
+    left: () => move(-1),
+    right: () => move(1),
     confirm: () => {
       const id = choicesRef.current[selectedRef.current];
       if (id) pick(id);
@@ -94,18 +101,18 @@ export default function LevelUpScreen({ lv, choices, skills, onPick }) {
       alignItems: 'center', justifyContent: 'center',
       zIndex: 25, padding: '20px 10px',
     }}>
-      <div style={{ fontSize: '0.91em', letterSpacing: 9, color: '#7b2fbe', marginBottom: 4 }}>NIVEAU {lv}</div>
+      <div style={{ fontSize: '0.91em', letterSpacing: 9, color: '#c77dff', marginBottom: 4 }}>{t('levelup.level')} {lv}</div>
       <div style={{
         fontFamily: "'Cinzel Decorative',serif", fontSize: '1.9em',
         color: '#c77dff', textShadow: '0 0 20px #7b2fbe', marginBottom: 14,
-      }}>Choisir un Pouvoir</div>
+      }}>{t('levelup.choose')}</div>
 
       <div style={{ width: '25em', maxWidth: '90vw', marginBottom: 20 }}>
         <div style={{
           fontSize: '0.82em', letterSpacing: 2, textAlign: 'center', marginBottom: 4,
           color: danger ? '#ff4d6d' : '#9d4edd',
         }}>
-          AUTO · {remaining.toFixed(1)}s
+          {t('levelup.auto')} · {remaining.toFixed(1)}s
         </div>
         <div style={{ height: 4, background: '#0a0020', borderRadius: 2, overflow: 'hidden' }}>
           <div style={{
@@ -129,7 +136,7 @@ export default function LevelUpScreen({ lv, choices, skills, onPick }) {
             <div
               key={id}
               onClick={() => pick(id)}
-              onMouseEnter={() => setSelected(i)}
+              onMouseEnter={() => setSelected(s => { if (s !== i) playSfx('uimove'); return i; })}
               style={{
                 width: '14.5em',
                 padding: '1.3em 1em',
@@ -161,7 +168,7 @@ export default function LevelUpScreen({ lv, choices, skills, onPick }) {
                   <span style={{ color: `${sk.color}80`, fontSize: '0.91em' }}> →{nLv}</span>
                 </div>
               ) : (
-                <div style={{ color: '#6a3a8a', fontSize: '0.82em', letterSpacing: 2, marginBottom: 5 }}>✦ NOUVEAU</div>
+                <div style={{ color: '#6a3a8a', fontSize: '0.82em', letterSpacing: 2, marginBottom: 5 }}>{t('levelup.new')}</div>
               )}
               <div style={{ color: '#b89ec4', fontSize: '0.91em', lineHeight: 1.6 }}>{sk.desc[nLv - 1]}</div>
               <div style={{
@@ -170,13 +177,13 @@ export default function LevelUpScreen({ lv, choices, skills, onPick }) {
                 border: `1px solid ${sk.color}28`,
                 borderRadius: 20, padding: '0.18em 0.7em',
                 display: 'inline-block',
-              }}>{sk.type === 'weapon' ? '⚔ ARME' : '🛡 PASSIF'}</div>
+              }}>{sk.type === 'weapon' ? t('levelup.weapon') : t('levelup.passive')}</div>
             </div>
           );
         })}
       </div>
-      <div style={{ marginTop: 18, color: '#4a1a6a', fontSize: '0.82em', letterSpacing: 2 }}>
-        ← → pour choisir · ↵ / ESPACE pour valider · 1-3 raccourci
+      <div style={{ marginTop: 18, color: '#b69ad8', fontSize: '0.82em', letterSpacing: 2 }}>
+        {t('levelup.hint')}
       </div>
     </div>
   );

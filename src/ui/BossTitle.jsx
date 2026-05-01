@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useT } from '../i18n.js';
 
 export default function BossTitle({ name, onDone }) {
+  const t = useT();
   const [phase, setPhase] = useState('in'); // 'in' | 'hold' | 'out' | 'done'
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function BossTitle({ name, onDone }) {
           color: '#ff4400',
           textShadow: '0 0 20px #8b0000, 0 0 40px #ff4400',
           marginBottom: 14,
-        }}>⚠ BOSS ⚠</div>
+        }}>{t('boss.tag')}</div>
         <div style={{
           fontFamily: "'Cinzel Decorative',serif",
           fontSize: '4em', letterSpacing: 4,

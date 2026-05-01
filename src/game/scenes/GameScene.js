@@ -173,6 +173,11 @@ export default class GameScene extends Phaser.Scene {
     this.offRestart = bus.on('game:restart', () => this.scene.restart());
     this.offMute    = bus.on('game:mute', m => { setMuted(m); if (!m) startMusic(); });
     this.offPick    = bus.on('skill:pick', id => this.onSkillPick(id));
+    this.offPause   = bus.on('pause:set', v => {
+      this.paused = !!v;
+      if (this.paused) stopMusic();
+      else if (!this.over) startMusic(this.bossMusicOn ? 'boss' : 'normal');
+    });
 
     initAudio();
     startMusic();
@@ -181,6 +186,7 @@ export default class GameScene extends Phaser.Scene {
       this.offRestart?.();
       this.offMute?.();
       this.offPick?.();
+      this.offPause?.();
       stopMusic();
     });
 

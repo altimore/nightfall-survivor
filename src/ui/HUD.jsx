@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { bus } from '../game/bus.js';
 import { SKILLS, ITEMS, ITEM_DURATIONS } from '../game/data.js';
+import { useT } from '../i18n.js';
 
 const fmt = t => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 
 export default function HUD({ muted, onToggleMute }) {
+  const t = useT();
   const [s, setS] = useState({ hp: 100, maxHp: 100, xp: 0, xpN: 20, lv: 1, t: 0, kills: 0, goal: 300, skills: {} });
 
   useEffect(() => bus.on('hud:update', setS), []);
@@ -41,7 +43,7 @@ export default function HUD({ muted, onToggleMute }) {
             lineHeight: 1.1,
           }}>{fmt(timeLeft)}</div>
           <div style={{ fontSize: '0.82em', color: '#7b2fbe', letterSpacing: 1 }}>
-            Niv.{s.lv} · ☠ {s.kills}
+            {t('hud.level')}{s.lv} · ☠ {s.kills}
           </div>
         </div>
         <div style={{ width: '15em', display: 'flex', alignItems: 'center', gap: '0.5em' }}>
@@ -104,7 +106,7 @@ export default function HUD({ muted, onToggleMute }) {
           {s.bosses.map((b, i) => (
             <div key={i}>
               <div style={{ fontSize: '0.82em', color: '#ff4400', letterSpacing: 2, marginBottom: 2 }}>
-                ⚠ {b.name} · {b.hp} PV
+                ⚠ {b.name} · {b.hp} {t('hud.hpUnit')}
               </div>
               <div style={{ height: '0.45em', background: '#200', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{
@@ -123,7 +125,7 @@ export default function HUD({ muted, onToggleMute }) {
           display: 'flex', gap: '0.45em', flexWrap: 'wrap', alignItems: 'center',
           padding: '0.36em 0.9em', borderTop: '1px solid rgba(90,24,154,.18)',
         }}>
-          <span style={{ fontSize: '0.82em', color: '#3c096c', letterSpacing: 2, marginRight: '0.36em' }}>POUVOIRS</span>
+          <span style={{ fontSize: '0.82em', color: '#3c096c', letterSpacing: 2, marginRight: '0.36em' }}>{t('hud.powers')}</span>
           {skillEntries.map(([id, lv]) => {
             const sk = SKILLS[id];
             if (!sk) return null;

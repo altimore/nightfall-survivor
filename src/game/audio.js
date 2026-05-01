@@ -73,6 +73,8 @@ const SFX_FNS = {
   projhit:   a => { noiseBlast(a,.06,.15,1500); },
   itempickup:a => { tone(a,660,'sine',.01,.05,.2,.2); tone(a,880,'sine',.02,.05,.18,.15); },
   eprojshoot:a => { noiseBlast(a,.05,.08,2000); },
+  uimove:    a => { tone(a,1100,'sine',.003,.02,.04,.10); },
+  uipick:    a => { tone(a,880,'sine',.005,.04,.12,.18); tone(a,1320,'sine',.01,.04,.10,.12,.04); },
 };
 
 const HAPTICS = {
@@ -118,6 +120,17 @@ export function playBossWarning() {
 // Music — two variants: 'normal' and 'boss'
 // ────────────────────────────────────────
 const MUSIC_VARIANTS = {
+  menu: {
+    bpm: 70,
+    bassSeq: [55, 49, 52, 49, 55, 49, 52, 55],
+    padChords: [[82,98,123],[78,93,116],[87,104,131],[82,98,123]],
+    bassWave: 'sine',
+    kick: false,
+    noHat: true,
+    snareVol: 0,
+    bassVol: 0.18,
+    padVol: 0.16,
+  },
   normal: {
     bpm: 95,
     bassSeq: [55, 55, 49, 52, 55, 49, 52, 55],
@@ -162,9 +175,9 @@ export function startMusic(variant = 'normal') {
         tone(a, cfg.bassSeq[Math.floor(s / 8) % 4] * 0.5, 'sine', .1, beatS * 3, beatS, cfg.bassVol * 0.6, off);
       }
       // hi-hat
-      noiseBlast(a, .04, s % 2 === 0 ? .06 : .03, 9000, off);
+      if (!cfg.noHat) noiseBlast(a, .04, s % 2 === 0 ? .06 : .03, 9000, off);
       // snare on offbeats
-      if (s % 8 === 4 || s % 8 === 12) noiseBlast(a, .12, cfg.snareVol, 800, off);
+      if (cfg.snareVol > 0 && (s % 8 === 4 || s % 8 === 12)) noiseBlast(a, .12, cfg.snareVol, 800, off);
       // kick drum (boss only — 4-on-the-floor)
       if (cfg.kick && s % 4 === 0) noiseBlast(a, .09, .42, 70, off);
       // pads
