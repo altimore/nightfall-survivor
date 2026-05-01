@@ -169,6 +169,9 @@ export const ITEMS = {
   rage:      { name:'Rage de sang',     icon:'💢', col:'#ff4400', colNum:0xff4400, desc:'Dégâts ×2 · 8s'          },
   damageBuff:{ name:"Glyphe d'acuité",  icon:'⚡', col:'#ffe066', colNum:0xffe066, desc:'Dégâts +50% · 10s'        },
   swiftness: { name:"Élixir de hâte",    icon:'⏩', col:'#88ffdd', colNum:0x88ffdd, desc:'Vitesse d\'attaque ×1.6 · 10s' },
+  goldRush:  { name:"Pluie d'or",         icon:'💎', col:'#ffd966', colNum:0xffd966, desc:'×2 or gagné · 12s'              },
+  xpRush:    { name:'Étincelle de savoir',icon:'📚', col:'#c77dff', colNum:0xc77dff, desc:'×2 XP gagnée · 10s'             },
+  timeStop:  { name:'Sablier brisé',      icon:'⏳', col:'#ffaaff', colNum:0xffaaff, desc:'Fige tous les ennemis · 3s'      },
   shield:    { name:'Bouclier sacré',   icon:'🛡️', col:'#80ffdb', colNum:0x80ffdb, desc:'Invincible · 5s'         },
   freeze:    { name:'Cristal glacé',    icon:'❄️', col:'#88ddff', colNum:0x88ddff, desc:'Ennemis -70% vitesse · 6s'},
   speed:     { name:'Bottes ailées',    icon:'💨', col:'#ffe066', colNum:0xffe066, desc:'Vitesse ×2 · 8s'          },
@@ -186,7 +189,7 @@ export const ITEMS = {
   curseHaste:       { name:'Hâte spectrale',    icon:'👁️', col:'#6a2a2a', colNum:0x6a2a2a, desc:'Malédiction : ennemis +50% vitesse · 10s' },
 };
 export const ITEM_DURATIONS = {
-  heal:0, megaheal:0, regen:6, rage:8, damageBuff:10, swiftness:10, shield:5, freeze:6, speed:8, magnet:0, nuke:0, vacuum:0,
+  heal:0, megaheal:0, regen:6, rage:8, damageBuff:10, swiftness:10, goldRush:12, xpRush:10, timeStop:0, shield:5, freeze:6, speed:8, magnet:0, nuke:0, vacuum:0,
   elementFire:12, elementIce:12, elementLightning:12, elementPoison:12,
   curseWeakness:12, curseSlowness:12, curseFragility:10, curseConfusion:8, curseHaste:10,
 };

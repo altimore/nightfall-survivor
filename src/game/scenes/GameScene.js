@@ -699,7 +699,7 @@ export default class GameScene extends Phaser.Scene {
     // Combo bonus: +0.5% damage per kill in the active streak, capped at +50% (= 100 kills).
     const comboBonus = 1 + Math.min(0.5, (this.comboCount || 0) * 0.005);
     const dmgBoost = (this.buffs.rage > 0 ? 2 : 1) * (this.buffs.damageBuff > 0 ? 1.5 : 1) * (this.buffs.curseWeakness > 0 ? 0.5 : 1) * comboBonus;
-    const freezeMult = (this.buffs.freeze > 0 ? 0.25 : 1) * (this.buffs.curseHaste > 0 ? 1.5 : 1);
+    const freezeMult = (this.buffs.freeze > 0 ? 0.25 : 1) * (this.buffs.curseHaste > 0 ? 1.5 : 1) * (this.buffs.timeStop > 0 ? 0 : 1);
     const shielded = this.buffs.shield > 0;
     const regenBuff = this.buffs.regen > 0 ? 8 : 0;
     this.confused = this.buffs.curseConfusion > 0;
@@ -1228,6 +1228,12 @@ export default class GameScene extends Phaser.Scene {
       this.fxNova(p.x, p.y, Math.max(this.W, this.H));
       this.shake(0.012, 320);
       playSfx('boss');
+    } else if (type === 'timeStop') {
+      // Instant freeze of all enemies for 3 seconds (handled via buffs.timeStop in freezeMult)
+      this.buffs.timeStop = 3;
+      this.fxNova(p.x, p.y, Math.max(this.W, this.H) * 0.7);
+      this.shake(0.008, 200);
+      playSfx('lightning');
     } else if (type === 'vacuum') {
       // Collect every XP orb instantly.
       for (const o of this.orbs) {

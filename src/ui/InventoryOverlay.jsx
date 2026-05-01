@@ -44,12 +44,27 @@ export default function InventoryOverlay({ hud, onClose }) {
         overflow: 'auto',
         boxShadow: '0 0 40px rgba(123,47,190,0.5)',
       }}>
-        <div style={{
-          fontFamily: "'Cinzel Decorative',serif",
-          fontSize: '1.9em', color: '#c77dff',
-          textShadow: '0 0 20px #7b2fbe',
-          marginBottom: '0.8em', textAlign: 'center', letterSpacing: 5,
-        }}>{t('inventory.title')}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.8em' }}>
+          <div style={{
+            fontFamily: "'Cinzel Decorative',serif",
+            fontSize: '1.9em', color: '#c77dff',
+            textShadow: '0 0 20px #7b2fbe',
+            textAlign: 'center', letterSpacing: 5, flex: 1,
+          }}>{t('inventory.title')}</div>
+          <button
+            onClick={() => { playSfx('uipick'); onClose(); }}
+            onTouchStart={e => e.stopPropagation()}
+            tabIndex={-1}
+            aria-label="Fermer"
+            style={{
+              padding: '0.4em 0.9em',
+              background: 'linear-gradient(135deg,#5a189a,#3c096c)',
+              border: '1px solid #c77dff', color: '#e0aaff',
+              fontFamily: "'Cinzel',serif", fontSize: '1em', letterSpacing: 2,
+              cursor: 'pointer', borderRadius: 4,
+              touchAction: 'manipulation',
+            }}>✕</button>
+        </div>
 
         <Section title={t('inventory.stats')} color="#80ffdb">
           <Stat label="❤ HP" value={`${hud.hp}/${hud.maxHp}`} color="#ff4d6d"/>
