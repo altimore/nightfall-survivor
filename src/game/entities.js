@@ -1304,6 +1304,109 @@ export class Item {
 // ────────────────────────────────────────
 // Toxic trail tile (poison puddle left by Sentier Maudit)
 // ────────────────────────────────────────
+// ────────────────────────────────────────
+// TerrainPatch — persistent ground effect zone (ice / mud / fire / poison).
+// Affects movement and/or applies damage to entities walking through.
+// ────────────────────────────────────────
+export const TERRAIN_TYPES = {
+  ice:    { col: 0x88ccff, edge: 0xc8e8ff, slip: true, speedMul: 1.0, dps: 0,  status: null },
+  mud:    { col: 0x6a4a2a, edge: 0x8a6a3a, slip: false, speedMul: 0.45, dps: 0, status: null },
+  fire:   { col: 0xff4400, edge: 0xffaa44, slip: false, speedMul: 0.85, dps: 18, status: 'burning' },
+  poison: { col: 0x55aa44, edge: 0x88dd66, slip: false, speedMul: 0.85, dps: 6,  status: 'poisoned' },
+};
+
+export class TerrainPatch {
+  constructor(scene, x, y, radius, type) {
+    this.gfx = scene.add.graphics().setDepth(2); // below most entities, above bg
+    this.x = x; this.y = y;
+    this.radius = radius;
+    this.type = type;
+    this.cfg = TERRAIN_TYPES[type] || TERRAIN_TYPES.ice;
+    this.bob = Math.random() * Math.PI * 2;
+    this.alive = true;
+    // Persistent patches don't decay (life = Infinity sentinel = -1)
+    this.life = -1;
+  }
+  redraw() {
+    const g = this.gfx;
+    g.clear();
+    g.x = this.x; g.y = this.y;
+    this.bob += 0.04;
+    const r = this.radius;
+    const c = this.cfg;
+    if (this.type === 'ice') {
+      // frosty disc with shimmer
+      g.fillStyle(c.col, 0.32);
+      g.fillCircle(0, 0, r);
+      g.fillStyle(c.edge, 0.55);
+      g.fillCircle(-r * 0.2, -r * 0.15, r * 0.55);
+      g.lineStyle(2, c.edge, 0.85);
+      g.strokeCircle(0, 0, r);
+      // crystals
+      const flick = (Math.sin(this.bob * 2) + 1) * 0.5;
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + this.bob * 0.05;
+        const cx = Math.cos(a) * r * 0.6;
+        const cy = Math.sin(a) * r * 0.6;
+        g.fillStyle(0xffffff, 0.55 + flick * 0.35);
+        g.fillTriangle(cx - 2, cy + 2, cx + 2, cy + 2, cx, cy - 4);
+      }
+    } else if (this.type === 'mud') {
+      // dark goopy puddle with bubbles
+      g.fillStyle(c.col, 0.85);
+      g.fillCircle(0, 0, r);
+      g.fillStyle(0x000000, 0.45);
+      g.fillCircle(-r * 0.15, r * 0.1, r * 0.85);
+      g.fillStyle(c.edge, 0.5);
+      g.lineStyle(1.5, c.edge, 0.6);
+      g.strokeCircle(0, 0, r);
+      // bubbles
+      const bub = Math.sin(this.bob * 1.5);
+      g.fillStyle(0x4a3a18, 0.95);
+      g.fillCircle(-r * 0.3 + bub, r * 0.1, r * 0.12);
+      g.fillCircle(r * 0.2, -r * 0.2 + bub * 0.5, r * 0.09);
+      g.fillCircle(r * 0.05, r * 0.35, r * 0.07);
+    } else if (this.type === 'fire') {
+      // glowing lava puddle with flickers
+      const flick = (Math.sin(this.bob * 4) + 1) * 0.5;
+      g.fillStyle(0xff2200, 0.45);
+      g.fillCircle(0, 0, r * 1.2);
+      g.fillStyle(c.col, 0.85);
+      g.fillCircle(0, 0, r);
+      g.fillStyle(c.edge, 0.7 + flick * 0.3);
+      g.fillCircle(-r * 0.2, -r * 0.1, r * 0.6);
+      g.fillStyle(0xffffaa, 0.55);
+      g.fillCircle(r * 0.15, r * 0.05, r * 0.32);
+      // flame tongues
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + this.bob * 0.3;
+        const fx = Math.cos(a) * r * 0.7;
+        const fy = Math.sin(a) * r * 0.7;
+        g.fillStyle(0xffaa44, 0.7 + flick * 0.3);
+        g.fillTriangle(fx - 3, fy + 2, fx + 3, fy + 2, fx, fy - 6 - flick * 3);
+      }
+    } else if (this.type === 'poison') {
+      // toxic green sludge with rising bubbles
+      g.fillStyle(c.col, 0.4);
+      g.fillCircle(0, 0, r * 1.15);
+      g.fillStyle(c.col, 0.78);
+      g.fillCircle(0, 0, r);
+      g.lineStyle(1.5, c.edge, 0.7);
+      g.strokeCircle(0, 0, r);
+      // bubbles rising
+      const t = this.bob * 1.2;
+      g.fillStyle(c.edge, 0.85);
+      g.fillCircle(-r * 0.2, -r * 0.1 + Math.sin(t) * 2, r * 0.13);
+      g.fillCircle(r * 0.25, r * 0.15 + Math.cos(t * 1.2) * 1.5, r * 0.1);
+      g.fillCircle(r * 0.05, -r * 0.3 + Math.sin(t * 0.7) * 2, r * 0.08);
+      // skull mark center
+      g.fillStyle(0x224422, 0.45);
+      g.fillCircle(0, 0, r * 0.25);
+    }
+  }
+  destroy() { this.gfx.destroy(); }
+}
+
 export class TrailTile {
   constructor(scene, x, y, radius, life) {
     this.gfx = scene.add.graphics().setDepth(3);

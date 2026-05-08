@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GOAL_TIME } from '../config.js';
-import { Player, Enemy, Projectile, EnemyProjectile, ChargedBolt, Boomerang, IceRing, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest, Obstacle, CONTROLLER_SOLO, CONTROLLER_P1, CONTROLLER_P2, CONTROLLER_P3, CONTROLLER_P4 } from '../entities.js';
+import { Player, Enemy, Projectile, EnemyProjectile, ChargedBolt, Boomerang, IceRing, XpOrb, Item, TrailTile, TrapMine, Minion, Turret, HomingMissile, FloatingBlade, Grenade, StormCloud, Nest, Obstacle, TerrainPatch, TERRAIN_TYPES, CONTROLLER_SOLO, CONTROLLER_P1, CONTROLLER_P2, CONTROLLER_P3, CONTROLLER_P4 } from '../entities.js';
 import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITEM_KEYS, ETYPES, ENEMY_DROPS, BIOMES } from '../data.js';
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
@@ -793,6 +793,20 @@ export default class GameScene extends Phaser.Scene {
     // Initial obstacles scattered on the map
     for (let i = 0; i < 7; i++) this.spawnObstacle();
 
+    // Initial terrain patches scattered across the world (6-10 patches biome-themed)
+    this.terrains = [];
+    const PATCH_COUNT = 8;
+    const biomeTerrainPool = {
+      forest:   ['poison', 'mud', 'mud', 'poison'],
+      dungeon:  ['fire', 'fire', 'mud', 'poison'],
+      abyss:    ['ice', 'ice', 'poison', 'mud'],
+      cemetery: ['poison', 'mud', 'mud', 'fire'],
+    };
+    const pool = biomeTerrainPool[this.biomeId] || biomeTerrainPool.cemetery;
+    for (let i = 0; i < PATCH_COUNT; i++) {
+      this.spawnTerrainPatch(pool[Math.floor(Math.random() * pool.length)]);
+    }
+
     initAudio();
     startMusic();
 
@@ -932,6 +946,29 @@ export default class GameScene extends Phaser.Scene {
     e.treasureDy = dy;
     e.lifetime = 9;
     this.enemies.push(e);
+  }
+
+  // Spawn a persistent terrain patch (ice/mud/fire/poison) at a random valid spot
+  // far enough from the world center spawn point. Patches are world-positioned.
+  spawnTerrainPatch(type) {
+    const wcx = this.WORLD_W / 2, wcy = this.WORLD_H / 2;
+    let x, y, tries = 0;
+    do {
+      x = 80 + Math.random() * (this.WORLD_W - 160);
+      y = 80 + Math.random() * (this.WORLD_H - 160);
+      tries++;
+    } while (Math.hypot(x - wcx, y - wcy) < 220 && tries < 12);
+    const radius = 50 + Math.random() * 35;
+    this.terrains.push(new TerrainPatch(this, x, y, radius, type));
+  }
+
+  // Sample the strongest terrain effect at (x,y). Returns null if none.
+  sampleTerrain(x, y) {
+    if (!this.terrains || this.terrains.length === 0) return null;
+    for (const t of this.terrains) {
+      if (Math.hypot(x - t.x, y - t.y) < t.radius) return t;
+    }
+    return null;
   }
 
   spawnObstacle() {
@@ -1685,6 +1722,7 @@ export default class GameScene extends Phaser.Scene {
     // ── Render
     this.drawBg();
     this.drawRadar();
+    if (this.terrains) for (const tp of this.terrains) tp.redraw();
     for (const t of this.trail) t.redraw();
     for (const tr of this.traps) tr.redraw();
     for (const n of this.nests) n.redraw();
@@ -1791,13 +1829,59 @@ export default class GameScene extends Phaser.Scene {
     const ml = Math.hypot(mx, my);
     if (ml > 1) { mx /= ml; my /= ml; }
     if (this.confused) { mx = -mx; my = -my; }
-    if (p.dashDur > 0) {
-      p.dashDur -= dt;
-      p.x += p.dashDir.x * 520 * dt;
-      p.y += p.dashDir.y * 520 * dt;
+    // Sample the terrain under the player (ice/mud/fire/poison) — affects movement
+    // and may apply damage / status. Dash ignores terrain effects (i-frame = i-effect).
+    const terrain = (p.dashDur > 0 || p.iframes > 0) ? null : this.sampleTerrain(p.x, p.y);
+    let terrainSpeedMul = 1;
+    if (terrain) {
+      terrainSpeedMul = terrain.cfg.speedMul;
+      // Damage / status from fire / poison patches.
+      if (terrain.cfg.dps > 0) {
+        p.hp -= terrain.cfg.dps * dt;
+        if (terrain.cfg.status === 'burning' && p.hp > 0 && Math.random() < dt * 2) {
+          // small spark fx
+          this.fxDamage?.(p.x, p.y, terrain.cfg.dps * dt, false);
+        }
+      }
+      // Ice "slip": apply momentum-style movement (smooth velocity instead of direct set).
+      if (terrain.cfg.slip) {
+        p._iceVx = p._iceVx || 0;
+        p._iceVy = p._iceVy || 0;
+        const target = p.speed * speedBoost;
+        const k = 1 - Math.exp(-2.5 * dt); // low friction → glissement
+        p._iceVx += ((mx * target) - p._iceVx) * k;
+        p._iceVy += ((my * target) - p._iceVy) * k;
+        if (p.dashDur > 0) {
+          p.dashDur -= dt;
+          p.x += p.dashDir.x * 520 * dt;
+          p.y += p.dashDir.y * 520 * dt;
+        } else {
+          p.x += p._iceVx * dt;
+          p.y += p._iceVy * dt;
+        }
+      } else {
+        // Normal movement with speed multiplier
+        p._iceVx = 0; p._iceVy = 0;
+        if (p.dashDur > 0) {
+          p.dashDur -= dt;
+          p.x += p.dashDir.x * 520 * dt;
+          p.y += p.dashDir.y * 520 * dt;
+        } else {
+          p.x += mx * p.speed * speedBoost * terrainSpeedMul * dt;
+          p.y += my * p.speed * speedBoost * terrainSpeedMul * dt;
+        }
+      }
     } else {
-      p.x += mx * p.speed * speedBoost * dt;
-      p.y += my * p.speed * speedBoost * dt;
+      // No terrain → normal flow
+      p._iceVx = 0; p._iceVy = 0;
+      if (p.dashDur > 0) {
+        p.dashDur -= dt;
+        p.x += p.dashDir.x * 520 * dt;
+        p.y += p.dashDir.y * 520 * dt;
+      } else {
+        p.x += mx * p.speed * speedBoost * dt;
+        p.y += my * p.speed * speedBoost * dt;
+      }
     }
     if (p.dashCD > 0) p.dashCD -= dt;
     p.x = Math.max(15, Math.min(this.WORLD_W - 15, p.x));
