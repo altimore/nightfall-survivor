@@ -1,8 +1,47 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { execSync } from 'node:child_process';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+// Version + changelog from git history (commit count = patch number).
+function gitOut(cmd, fallback = '') {
+  try { return execSync(cmd, { encoding: 'utf8' }).trim(); } catch (_) { return fallback; }
+}
+const COMMIT_COUNT = parseInt(gitOut('git rev-list --count HEAD', '0'), 10) || 0;
+const COMMIT_HASH = gitOut('git rev-parse --short HEAD', 'dev');
+const COMMIT_DATE = gitOut('git log -1 --format=%cs', '');
+const APP_VERSION = `0.${Math.floor(COMMIT_COUNT / 100)}.${COMMIT_COUNT}`;
+
+// Generate changelog.json from the last 40 commits at build time.
+function generateChangelog() {
+  const out = resolve('public/changelog.json');
+  try {
+    const log = gitOut('git log -40 --pretty=format:%h|%cs|%s', '');
+    const entries = log.split('\n').filter(Boolean).map(line => {
+      const [hash, date, ...subject] = line.split('|');
+      return { hash, date, subject: subject.join('|') };
+    });
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, JSON.stringify({
+      version: APP_VERSION,
+      hash: COMMIT_HASH,
+      date: COMMIT_DATE,
+      count: COMMIT_COUNT,
+      entries,
+    }, null, 2));
+  } catch (_) {}
+}
+generateChangelog();
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __APP_HASH__: JSON.stringify(COMMIT_HASH),
+    __APP_DATE__: JSON.stringify(COMMIT_DATE),
+    __APP_BUILD__: COMMIT_COUNT,
+  },
   plugins: [
     react(),
     VitePWA({
@@ -19,21 +58,12 @@ export default defineConfig({
         scope: '/nightfall-survivor/',
         start_url: '/nightfall-survivor/',
         icons: [
-          {
-            src: 'icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Cache the production app shell + assets so the game runs offline.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json}'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\//,

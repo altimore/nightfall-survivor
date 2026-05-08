@@ -10,7 +10,7 @@ import { playSfx } from '../game/audio.js';
 // Starter weapons : utility powers like 'gather' are excluded — they can't kill on their own.
 const WEAPONS = ['dagger', 'sword', 'whip', 'bow', 'boomerang', 'missile', 'floating', 'grenade', 'flamethrower', 'cloud', 'nova', 'lightning', 'chargedBolt', 'iceRing', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
 
-export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, character, onCharacterChange, biome, onBiomeChange, uiScale, setUiScale, onOpenGuide, onOpenShop, onOpenSettings }) {
+export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, character, onCharacterChange, biome, onBiomeChange, uiScale, setUiScale, onOpenGuide, onOpenShop, onOpenSettings, onOpenChangelog, onOpenSuggestion }) {
   const t = useT();
   const lang = getLang();
   const pickWeapon = id => { if (id !== weapon) playSfx('uimove'); onWeaponChange(id); };
@@ -359,8 +359,37 @@ export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mo
         <div style={{ marginTop: 12, color: '#b69ad8', fontSize: '0.91em', letterSpacing: 2 }}>
           {t('menu.controls')}
         </div>
-        <div style={{ marginTop: 6, color: '#7b46c4', fontSize: '0.82em', letterSpacing: 1 }}>
-          {t('menu.version')}
+        <div style={{ marginTop: 8, display: 'flex', gap: '0.55em', flexWrap: 'wrap', justifyContent: 'center' }}>
+          {onOpenChangelog && (
+            <button
+              onClick={() => { playSfx('uipick'); onOpenChangelog(); }}
+              onMouseDown={e => e.preventDefault()}
+              tabIndex={-1}
+              style={{
+                padding: '0.35em 0.9em',
+                background: 'transparent',
+                border: '1px solid #6c3483aa',
+                color: '#9d4edd',
+                fontFamily: "'Cinzel',serif", fontSize: '0.78em', letterSpacing: 1,
+                cursor: 'pointer', borderRadius: 3,
+              }}
+            >📜 v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'} ({typeof __APP_HASH__ !== 'undefined' ? __APP_HASH__ : 'dev'})</button>
+          )}
+          {onOpenSuggestion && (
+            <button
+              onClick={() => { playSfx('uipick'); onOpenSuggestion(); }}
+              onMouseDown={e => e.preventDefault()}
+              tabIndex={-1}
+              style={{
+                padding: '0.35em 0.9em',
+                background: 'transparent',
+                border: '1px solid #ffd96666',
+                color: '#ffd966',
+                fontFamily: "'Cinzel',serif", fontSize: '0.78em', letterSpacing: 1,
+                cursor: 'pointer', borderRadius: 3,
+              }}
+            >💡 SUGGESTION</button>
+          )}
         </div>
       </div>
     </div>

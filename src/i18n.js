@@ -14,7 +14,7 @@ const dicts = {
       textSize: 'TAILLE TEXTE',
       lang: 'LANGUE',
       controls: '🎮 ZQSD/WASD/Flèches · Espace = Dash · I = Inventaire · ÉCHAP = Pause · 📱 Joystick + 2ᵉ doigt = Dash',
-      version: 'v0.5 · Phaser 4 · 7 ennemis · 9 pouvoirs · 6 items · 4 boss',
+      version: 'v1.0 · 14 ennemis · 20 armes · 11 évolutions · 6 boss · 4 biomes · 6 persos',
     },
     end: {
       victory: 'VICTOIRE',
@@ -152,7 +152,7 @@ const dicts = {
       textSize: 'TEXT SIZE',
       lang: 'LANGUAGE',
       controls: '🎮 ZQSD/WASD/Arrows · Space = Dash · I = Inventory · ESC = Pause · 📱 Joystick + 2nd finger = Dash',
-      version: 'v0.5 · Phaser 4 · 7 enemies · 9 powers · 6 items · 4 bosses',
+      version: 'v1.0 · 14 enemies · 20 weapons · 11 evolutions · 6 bosses · 4 biomes · 6 chars',
     },
     end: {
       victory: 'VICTORY',
