@@ -3642,11 +3642,25 @@ export default class GameScene extends Phaser.Scene {
   }
 
   onLevelUp(p) {
+    const choices = getChoices(p);
+    // No choices left (all skills max + slots saturated + evolutions taken).
+    // Grant a small mythic bonus and skip the level-up screen.
+    if (!choices || choices.length === 0) {
+      const bonusKind = Math.floor(Math.random() * 4);
+      if (bonusKind === 0) { p.maxHp += 10; p.hp = Math.min(p.maxHp, p.hp + 10); }
+      else if (bonusKind === 1) { p.metaDmgMul = (p.metaDmgMul || 1) * 1.04; }
+      else if (bonusKind === 2) { p.metaCritBonus = (p.metaCritBonus || 0) + 0.01; }
+      else { p.metaXpMul = (p.metaXpMul || 1) * 1.05; }
+      try { refreshStats(p); } catch (_) {}
+      try { this.fxBanner('+ BONUS MYTHIQUE +', '#ffd966', 22); } catch (_) {}
+      try { playSfx('levelup'); } catch (_) {}
+      this.emitHud();
+      return; // game keeps running, no overlay
+    }
     this.pendingLevelupPlayer = p;
     this.paused = true;
     this.shake(0.006, 200);
     stopMusic();
-    const choices = getChoices(p);
     bus.emit('levelup', {
       lv: p.level, choices, playerId: p.id,
       rerollsLeft: p.rerollsLeft || 0,
