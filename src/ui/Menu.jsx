@@ -10,7 +10,7 @@ import { playSfx } from '../game/audio.js';
 // Starter weapons : utility powers like 'gather' are excluded — they can't kill on their own.
 const WEAPONS = ['dagger', 'sword', 'whip', 'bow', 'boomerang', 'missile', 'floating', 'grenade', 'flamethrower', 'cloud', 'nova', 'lightning', 'chargedBolt', 'iceRing', 'orbit', 'trail', 'traps', 'turret', 'charm', 'summon'];
 
-export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, character, onCharacterChange, biome, onBiomeChange, uiScale, setUiScale, onOpenGuide, onOpenShop, onOpenSettings, onOpenChangelog, onOpenSuggestion }) {
+export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mode, onModeChange, numPlayers, onNumPlayersChange, character, onCharacterChange, biome, onBiomeChange, uiScale, setUiScale, onOpenGuide, onOpenShop, onOpenSettings, onOpenChangelog, onOpenSuggestion, onOpenAbout }) {
   const t = useT();
   const lang = getLang();
   const pickWeapon = id => { if (id !== weapon) playSfx('uimove'); onWeaponChange(id); };
@@ -399,6 +399,21 @@ export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mo
                 cursor: 'pointer', borderRadius: 3,
               }}
             >💡 SUGGESTION</button>
+          )}
+          {onOpenAbout && (
+            <button
+              onClick={() => { playSfx('uipick'); onOpenAbout(); }}
+              onMouseDown={e => e.preventDefault()}
+              tabIndex={-1}
+              style={{
+                padding: '0.35em 0.9em',
+                background: 'transparent',
+                border: '1px solid #88ddff66',
+                color: '#88ddff',
+                fontFamily: "'Cinzel',serif", fontSize: '0.78em', letterSpacing: 1,
+                cursor: 'pointer', borderRadius: 3,
+              }}
+            >ℹ ABOUT</button>
           )}
         </div>
       </div>

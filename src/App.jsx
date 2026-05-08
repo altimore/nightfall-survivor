@@ -15,6 +15,7 @@ import Settings from './ui/Settings.jsx';
 import Tutorial, { isTutorialSeen } from './ui/Tutorial.jsx';
 import Changelog from './ui/Changelog.jsx';
 import Suggestion from './ui/Suggestion.jsx';
+import About from './ui/About.jsx';
 import { useGamepadActions } from './ui/useGamepad.js';
 
 export default function App() {
@@ -231,12 +232,13 @@ export default function App() {
       {bossAnnounce && phase === 'playing' && (
         <BossTitle key={bossAnnounce.key} name={bossAnnounce.name} onDone={() => setBossAnnounce(null)} />
       )}
-      {phase === 'menu' && <Menu onStart={start} onStartDaily={startDaily} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} character={character} onCharacterChange={setCharacter} biome={biome} onBiomeChange={setBiome} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} onOpenShop={() => setPhase('shop')} onOpenSettings={() => setPhase('settings')} onOpenChangelog={() => setPhase('changelog')} onOpenSuggestion={() => setPhase('suggestion')} />}
+      {phase === 'menu' && <Menu onStart={start} onStartDaily={startDaily} weapon={startWeapon} onWeaponChange={setStartWeapon} mode={startMode} onModeChange={setStartMode} numPlayers={numPlayers} onNumPlayersChange={setNumPlayers} character={character} onCharacterChange={setCharacter} biome={biome} onBiomeChange={setBiome} uiScale={uiScale} setUiScale={setUiScale} onOpenGuide={() => setPhase('compendium')} onOpenShop={() => setPhase('shop')} onOpenSettings={() => setPhase('settings')} onOpenChangelog={() => setPhase('changelog')} onOpenSuggestion={() => setPhase('suggestion')} onOpenAbout={() => setPhase('about')} />}
       {phase === 'compendium' && <Compendium onClose={() => setPhase('menu')} />}
       {phase === 'shop' && <Shop onClose={() => setPhase('menu')} />}
       {phase === 'settings' && <Settings onClose={() => setPhase('menu')} />}
       {phase === 'changelog' && <Changelog onClose={() => setPhase('menu')} />}
       {phase === 'suggestion' && <Suggestion onClose={() => setPhase('menu')} />}
+      {phase === 'about' && <About onClose={() => setPhase('menu')} />}
       {phase === 'levelup' && (
         <LevelUpScreen
           lv={levelUp.lv}
