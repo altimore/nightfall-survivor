@@ -12,6 +12,7 @@ import Compendium from './ui/Compendium.jsx';
 import InventoryOverlay from './ui/InventoryOverlay.jsx';
 import Shop from './ui/Shop.jsx';
 import Settings from './ui/Settings.jsx';
+import Tutorial, { isTutorialSeen } from './ui/Tutorial.jsx';
 import { useGamepadActions } from './ui/useGamepad.js';
 
 export default function App() {
@@ -38,6 +39,7 @@ export default function App() {
   const [bossAnnounce, setBossAnnounce] = useState(null);
   const [runStats, setRunStats] = useState(null);
   const [achievementQueue, setAchievementQueue] = useState([]);
+  const [showTutorial, setShowTutorial] = useState(() => !isTutorialSeen());
   const [uiScale, setUiScaleState] = useState(() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('uiScale') : null;
     const n = saved ? parseFloat(saved) : 1;
@@ -283,6 +285,9 @@ export default function App() {
               boxShadow: '0 0 14px rgba(199,125,255,0.25)',
             }}>🎒</button>
         </div>
+      )}
+      {showTutorial && phase === 'menu' && (
+        <Tutorial onDone={() => setShowTutorial(false)} />
       )}
       {achievementQueue.length > 0 && (
         <div style={{

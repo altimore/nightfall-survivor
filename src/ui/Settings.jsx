@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getSettings, setSfxVolume, setMusicVolume, setHapticsEnabled, playSfx } from '../game/audio.js';
+import { resetTutorial } from './Tutorial.jsx';
 import { useT } from '../i18n.js';
 import { useGamepadActions } from './useGamepad.js';
 import { MenuBg } from './SceneBg.jsx';
@@ -82,7 +83,24 @@ export default function Settings({ onClose }) {
           {sliderRow('🔊 ' + (t('settings.sfx') || 'Effets sonores'), s.sfxVolume, onSfx, '#c77dff')}
           {sliderRow('🎵 ' + (t('settings.music') || 'Musique'), s.musicVolume, onMusic, '#88ddff')}
 
-          <div style={{ marginTop: '1.5em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ marginTop: '1.2em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: '#d8b8f0', fontSize: '0.9em', letterSpacing: 2 }}>📖 Tutoriel</span>
+            <button
+              onClick={() => { resetTutorial(); playSfx('uipick'); onClose(); }}
+              onMouseDown={e => e.preventDefault()}
+              tabIndex={-1}
+              style={{
+                padding: '0.4em 1em',
+                background: 'rgba(199,125,255,0.15)',
+                border: '1px solid #c77dff',
+                color: '#e0aaff',
+                fontFamily: "'Cinzel',serif", fontSize: '0.85em', letterSpacing: 2,
+                cursor: 'pointer', borderRadius: 4,
+              }}
+            >Revoir</button>
+          </div>
+
+          <div style={{ marginTop: '1.2em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ color: '#d8b8f0', fontSize: '0.9em', letterSpacing: 2 }}>📳 {t('settings.haptics') || 'Vibration mobile'}</span>
             <button
               onClick={() => onHaptics(!s.hapticsEnabled)}
