@@ -806,6 +806,20 @@ export default class GameScene extends Phaser.Scene {
     for (let i = 0; i < PATCH_COUNT; i++) {
       this.spawnTerrainPatch(pool[Math.floor(Math.random() * pool.length)]);
     }
+    // Solid obstacles (rocks/bushes/river) — biome-themed
+    const biomeSolidsPool = {
+      forest:   { solids: ['bush', 'bush', 'rock'], rivers: 1, count: 5 },
+      dungeon:  { solids: ['rock', 'rock'], rivers: 0, count: 6 },
+      abyss:    { solids: ['rock'], rivers: 0, count: 4 },
+      cemetery: { solids: ['rock', 'bush'], rivers: 1, count: 5 },
+    };
+    const sCfg = biomeSolidsPool[this.biomeId] || biomeSolidsPool.cemetery;
+    for (let i = 0; i < sCfg.count; i++) {
+      this.spawnTerrainPatch(sCfg.solids[Math.floor(Math.random() * sCfg.solids.length)]);
+    }
+    for (let i = 0; i < sCfg.rivers; i++) {
+      this.spawnRiver();
+    }
 
     initAudio();
     startMusic();
@@ -969,6 +983,40 @@ export default class GameScene extends Phaser.Scene {
       if (Math.hypot(x - t.x, y - t.y) < t.radius) return t;
     }
     return null;
+  }
+
+  // Test if (x,y) is blocked by a solid terrain patch (rock/river/bush).
+  // Returns the offending patch or null.
+  collideSolid(x, y, padding = 8) {
+    if (!this.terrains) return null;
+    for (const t of this.terrains) {
+      if (!t.cfg?.solid) continue;
+      if (Math.hypot(x - t.x, y - t.y) < t.radius + padding) return t;
+    }
+    return null;
+  }
+
+  // Spawn a river: a chain of 5-7 connected water patches forming a meandering line.
+  spawnRiver() {
+    const ww = this.WORLD_W, wh = this.WORLD_H;
+    // Random side-to-side direction
+    const horizontal = Math.random() < 0.5;
+    const startX = horizontal ? 100 : (ww * 0.25 + Math.random() * ww * 0.5);
+    const startY = horizontal ? (wh * 0.25 + Math.random() * wh * 0.5) : 100;
+    const segs = 6;
+    const step = horizontal ? (ww - 200) / segs : (wh - 200) / segs;
+    let cx = startX, cy = startY;
+    for (let i = 0; i < segs; i++) {
+      // Skip if too close to spawn
+      if (Math.hypot(cx - ww / 2, cy - wh / 2) > 240) {
+        const r = 38 + Math.random() * 18;
+        this.terrains.push(new TerrainPatch(this, cx, cy, r, 'river'));
+      }
+      // Meander
+      const wobble = (Math.random() - 0.5) * 60;
+      if (horizontal) { cx += step; cy += wobble; }
+      else { cy += step; cx += wobble; }
+    }
   }
 
   spawnObstacle() {
@@ -1884,6 +1932,27 @@ export default class GameScene extends Phaser.Scene {
       }
     }
     if (p.dashCD > 0) p.dashCD -= dt;
+    // Solid collision (rock / river / bush). Try X then Y individually so the
+    // player can slide along the surface instead of stopping dead.
+    if (p.dashDur <= 0) {
+      const px = p.x, py = p.y;
+      // Snapshot before-move position : we re-derive deltas to revert per-axis.
+      const dx = px - (p._prevX ?? px);
+      const dy = py - (p._prevY ?? py);
+      const blockedXY = this.collideSolid(px, py, 12);
+      if (blockedXY) {
+        // Try without X delta
+        const tryY = this.collideSolid(px - dx, py, 12);
+        if (!tryY) { p.x = px - dx; }
+        else {
+          // Try without Y delta
+          const tryX = this.collideSolid(px, py - dy, 12);
+          if (!tryX) { p.y = py - dy; }
+          else { p.x = px - dx; p.y = py - dy; }
+        }
+      }
+    }
+    p._prevX = p.x; p._prevY = p.y;
     p.x = Math.max(15, Math.min(this.WORLD_W - 15, p.x));
     p.y = Math.max(15, Math.min(this.WORLD_H - 15, p.y));
     p.iframes = Math.max(0, p.iframes - dt);
@@ -2143,8 +2212,34 @@ export default class GameScene extends Phaser.Scene {
       const k = 1 - Math.exp(-smooth * dt);
       e.vx += (tvx - e.vx) * k;
       e.vy += (tvy - e.vy) * k;
-      e.x += e.vx * dt;
-      e.y += e.vy * dt;
+      // Terrain effects on enemies (skipped for phase enemies = ghost / wraith).
+      const phaseImmune = e.behavior === 'phase';
+      const t = !phaseImmune ? this.sampleTerrain(e.x, e.y) : null;
+      let mul = 1;
+      if (t) {
+        mul = t.cfg.speedMul;
+        if (t.cfg.dps > 0) {
+          this.dmgTo(e, t.cfg.dps * dt, t.type === 'fire' ? 'fire' : 'poison', null, null);
+        }
+      }
+      const nx = e.x + e.vx * dt * mul;
+      const ny = e.y + e.vy * dt * mul;
+      // Solid collision for enemies (slide-along like the player). Phase ignores walls.
+      if (!phaseImmune) {
+        const blocked = this.collideSolid(nx, ny, 6);
+        if (blocked) {
+          const tryX = this.collideSolid(nx, e.y, 6);
+          const tryY = this.collideSolid(e.x, ny, 6);
+          if (!tryX) { e.x = nx; }
+          else if (!tryY) { e.y = ny; }
+          // else fully stuck — bump velocity slightly to escape after a few frames
+          else { e.vx *= 0.5; e.vy *= 0.5; }
+        } else {
+          e.x = nx; e.y = ny;
+        }
+      } else {
+        e.x = nx; e.y = ny;
+      }
     }
   }
 

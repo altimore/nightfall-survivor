@@ -1309,10 +1309,13 @@ export class Item {
 // Affects movement and/or applies damage to entities walking through.
 // ────────────────────────────────────────
 export const TERRAIN_TYPES = {
-  ice:    { col: 0x88ccff, edge: 0xc8e8ff, slip: true, speedMul: 1.0, dps: 0,  status: null },
-  mud:    { col: 0x6a4a2a, edge: 0x8a6a3a, slip: false, speedMul: 0.45, dps: 0, status: null },
-  fire:   { col: 0xff4400, edge: 0xffaa44, slip: false, speedMul: 0.85, dps: 18, status: 'burning' },
-  poison: { col: 0x55aa44, edge: 0x88dd66, slip: false, speedMul: 0.85, dps: 6,  status: 'poisoned' },
+  ice:    { col: 0x88ccff, edge: 0xc8e8ff, slip: true, speedMul: 1.0, dps: 0,  status: null, solid: false },
+  mud:    { col: 0x6a4a2a, edge: 0x8a6a3a, slip: false, speedMul: 0.45, dps: 0, status: null, solid: false },
+  fire:   { col: 0xff4400, edge: 0xffaa44, slip: false, speedMul: 0.85, dps: 18, status: 'burning',  solid: false },
+  poison: { col: 0x55aa44, edge: 0x88dd66, slip: false, speedMul: 0.85, dps: 6,  status: 'poisoned', solid: false },
+  rock:   { col: 0x6a6a78, edge: 0x9a9aaa, slip: false, speedMul: 1.0, dps: 0,  status: null, solid: true },
+  river:  { col: 0x4488dd, edge: 0x88ccff, slip: false, speedMul: 1.0, dps: 0,  status: null, solid: true },
+  bush:   { col: 0x3a6a3a, edge: 0x66aa44, slip: false, speedMul: 1.0, dps: 0,  status: null, solid: true },
 };
 
 export class TerrainPatch {
@@ -1385,6 +1388,77 @@ export class TerrainPatch {
         g.fillStyle(0xffaa44, 0.7 + flick * 0.3);
         g.fillTriangle(fx - 3, fy + 2, fx + 3, fy + 2, fx, fy - 6 - flick * 3);
       }
+    } else if (this.type === 'rock') {
+      // imposing boulder cluster (solid block)
+      g.fillStyle(0x000000, 0.6);
+      g.fillEllipse(0, r * 0.55, r * 1.6, r * 0.4);
+      g.fillStyle(0x2a2a35, 1);
+      g.fillCircle(0, 0, r);
+      g.fillStyle(c.col, 1);
+      g.fillCircle(-r * 0.15, -r * 0.1, r * 0.85);
+      g.fillStyle(c.edge, 0.9);
+      g.fillCircle(-r * 0.3, -r * 0.25, r * 0.45);
+      // moss patches
+      g.fillStyle(0x3a6a2a, 0.7);
+      g.fillEllipse(r * 0.3, -r * 0.3, r * 0.5, r * 0.18);
+      g.fillEllipse(-r * 0.4, r * 0.3, r * 0.4, r * 0.15);
+      // crack
+      g.lineStyle(2, 0x0a0a14, 0.85);
+      g.beginPath(); g.moveTo(-r * 0.4, -r * 0.5); g.lineTo(r * 0.2, r * 0.4); g.strokePath();
+    } else if (this.type === 'river') {
+      // flowing water with ripples
+      g.fillStyle(0x000000, 0.45);
+      g.fillEllipse(0, r * 0.55, r * 1.5, r * 0.35);
+      // shore (sandy edge)
+      g.fillStyle(0x6a5a3a, 0.8);
+      g.fillCircle(0, 0, r * 1.05);
+      // water body (3 layers for depth)
+      g.fillStyle(0x224a8a, 0.95);
+      g.fillCircle(0, 0, r);
+      g.fillStyle(c.col, 0.85);
+      g.fillCircle(-r * 0.1, -r * 0.05, r * 0.85);
+      g.fillStyle(c.edge, 0.6);
+      g.fillCircle(-r * 0.3, -r * 0.2, r * 0.4);
+      // ripples (animated)
+      const t = this.bob;
+      g.lineStyle(1.5, 0xc8e8ff, 0.65);
+      g.strokeEllipse(Math.sin(t) * 4, Math.cos(t * 0.7) * 2, r * 0.7, r * 0.2);
+      g.strokeEllipse(Math.cos(t * 1.1) * 3, Math.sin(t * 0.8) * 3 + r * 0.25, r * 0.5, r * 0.15);
+      // sparkles
+      g.fillStyle(0xffffff, 0.85);
+      g.fillCircle(Math.sin(t * 1.3) * r * 0.5, Math.cos(t) * r * 0.4, 1);
+      g.fillCircle(Math.cos(t * 0.9) * r * 0.45, -Math.sin(t * 1.2) * r * 0.35, 0.8);
+    } else if (this.type === 'bush') {
+      // dense thorny bush (impassable)
+      g.fillStyle(0x000000, 0.5);
+      g.fillEllipse(0, r * 0.5, r * 1.4, r * 0.4);
+      // base shadow body
+      g.fillStyle(0x1a3a18, 1);
+      g.fillCircle(0, r * 0.1, r);
+      // foliage clusters (4 overlapping circles)
+      g.fillStyle(c.col, 0.95);
+      g.fillCircle(-r * 0.4, -r * 0.1, r * 0.65);
+      g.fillCircle(r * 0.4, -r * 0.05, r * 0.6);
+      g.fillCircle(0, -r * 0.3, r * 0.55);
+      g.fillCircle(0, r * 0.2, r * 0.65);
+      // highlight
+      g.fillStyle(c.edge, 0.7);
+      g.fillCircle(-r * 0.35, -r * 0.25, r * 0.35);
+      g.fillCircle(r * 0.3, -r * 0.15, r * 0.32);
+      // thorns
+      g.lineStyle(1.5, 0x1a0a04, 0.85);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 + this.bob * 0.05;
+        const x1 = Math.cos(a) * r * 0.85;
+        const y1 = Math.sin(a) * r * 0.85;
+        const x2 = Math.cos(a) * r * 1.05;
+        const y2 = Math.sin(a) * r * 1.05;
+        g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.strokePath();
+      }
+      // small berries
+      g.fillStyle(0x6a1a3a, 1);
+      g.fillCircle(r * 0.2, -r * 0.4, 1.6);
+      g.fillCircle(-r * 0.3, r * 0.1, 1.4);
     } else if (this.type === 'poison') {
       // toxic green sludge with rising bubbles
       g.fillStyle(c.col, 0.4);
