@@ -213,7 +213,7 @@ export const ITEM_KEYS = Object.keys(ITEMS);
 // ════════════════════════════════════════
 // Helpers
 // ════════════════════════════════════════
-export const slv = (player, id) => player.skills[id] || 0;
+export const slv = (player, id) => (player?.skills?.[id]) || 0;
 
 // Slot limits: forces players to upgrade existing skills rather than spread thin.
 export const MAX_WEAPONS = 6;

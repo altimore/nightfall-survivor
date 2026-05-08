@@ -2227,6 +2227,34 @@ export default class GameScene extends Phaser.Scene {
 
   updateEnemyAi(dt, e, player, freezeMult) {
     e.tickStatuses(dt, this);
+    // Contagion : un ennemi empoisonné peut transmettre le poison à un voisin proche.
+    if (e.statuses?.poisoned) {
+      e._contagionT = (e._contagionT || 0.8) - dt;
+      if (e._contagionT <= 0) {
+        e._contagionT = 0.8;
+        // Find a nearby healthy enemy to infect
+        for (const other of this.enemies) {
+          if (other === e || other.charmed) continue;
+          if (other.statuses?.poisoned) continue;
+          if (Math.hypot(other.x - e.x, other.y - e.y) < 50) {
+            // Inherit a slightly weaker poison (60% damage, 60% ticks)
+            const src = e.statuses.poisoned;
+            other.statuses.poisoned = {
+              dmgPerTick: src.dmgPerTick * 0.6,
+              ticksLeft: Math.max(2, Math.floor(src.ticksLeft * 0.6)),
+              interval: src.interval,
+              t: src.interval,
+            };
+            // green spark fx
+            const tg = this.add.graphics().setDepth(11);
+            tg.lineStyle(1.5, 0x88dd33, 0.8);
+            tg.strokeCircle(other.x, other.y, 12);
+            this.tweens.add({ targets: tg, alpha: 0, scale: 1.6, duration: 350, onComplete: () => tg.destroy() });
+            break;
+          }
+        }
+      }
+    }
     if (e.charmed) {
       e.charmedDur -= dt;
       if (e.charmedDur <= 0) {
