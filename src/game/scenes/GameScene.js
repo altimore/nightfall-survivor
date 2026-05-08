@@ -3472,25 +3472,36 @@ export default class GameScene extends Phaser.Scene {
 
   onSkillPick(id) {
     const p = this.pendingLevelupPlayer || this.player;
-    if (id.startsWith('evo:')) {
-      const evoId = id.slice(4);
-      if (!(p.evolved instanceof Set)) p.evolved = new Set();
-      p.evolved.add(evoId);
-      // Heal a bit on evolution as flavor
-      p.hp = Math.min(p.maxHp, p.hp + 30);
-      this.fxNova(p.x, p.y, 80);
-      this.shake(0.008, 220);
-      playSfx('evolution');
-      this.fxBanner('✦ ÉVOLUTION ✦', '#ffd966', 32);
-    } else {
-      p.skills[id] = (p.skills[id] || 0) + 1;
-      if (id === 'heart') {
-        const lv = p.skills.heart;
-        p.maxHp += lv <= 2 ? 50 : 80;
-        if (lv === 3) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.15);
-      }
+    if (!p) {
+      // Defensive: no active player → just unblock the run.
+      this.pendingLevelupPlayer = null;
+      this.paused = false;
+      this.emitHud();
+      return;
     }
-    refreshStats(p);
+    try {
+      if (typeof id === 'string' && id.startsWith('evo:')) {
+        const evoId = id.slice(4);
+        if (!(p.evolved instanceof Set)) p.evolved = new Set();
+        p.evolved.add(evoId);
+        // Heal a bit on evolution as flavor
+        p.hp = Math.min(p.maxHp, p.hp + 30);
+        try { this.fxNova(p.x, p.y, 80); } catch (_) {}
+        try { this.shake(0.008, 220); } catch (_) {}
+        try { playSfx('evolution'); } catch (_) {}
+        try { this.fxBanner('✦ ÉVOLUTION ✦', '#ffd966', 32); } catch (_) {}
+      } else if (typeof id === 'string') {
+        p.skills[id] = (p.skills[id] || 0) + 1;
+        if (id === 'heart') {
+          const lv = p.skills.heart;
+          p.maxHp += lv <= 2 ? 50 : 80;
+          if (lv === 3) p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.15);
+        }
+      }
+    } catch (err) {
+      console.error('onSkillPick error:', err);
+    }
+    try { refreshStats(p); } catch (e) { console.error('refreshStats error:', e); }
     this.pendingLevelupPlayer = null;
     this.paused = false;
     if (!this.over) startMusic(this.bossMusicOn ? 'boss' : 'normal');
@@ -4272,7 +4283,7 @@ export default class GameScene extends Phaser.Scene {
     const biome = this.biome || BIOMES.cemetery;
     const WW = this.WORLD_W, WH = this.WORLD_H;
 
-    // Hex grid — biome-themed colour, drawn over the entire world.
+    // Hex grid — biome-themed colour
     g.lineStyle(1, biome.gridColor, 0.10);
     for (let x = 0; x < WW + 80; x += 80) {
       for (let y = 0; y < WH + 70; y += 70) {
@@ -4303,6 +4314,7 @@ export default class GameScene extends Phaser.Scene {
       const fy = (WH * 0.5) + Math.sin(t * 0.08 + i * 1.5) * (WH * 0.5);
       g.fillCircle(fx, fy, 200);
     }
+
   }
 
   drawOrbits(p) {
