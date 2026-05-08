@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { META_UPGRADES, getMetaState, buyUpgrade, resetMeta } from '../game/meta.js';
 import { ACHIEVEMENTS, getUnlockedSet } from '../game/achievements.js';
+import { CHARACTERS } from '../game/characters.js';
 import { useT } from '../i18n.js';
 import { useGamepadActions } from './useGamepad.js';
 import { playSfx } from '../game/audio.js';
@@ -139,6 +140,7 @@ export default function Shop({ onClose }) {
         </div>
 
         <GlobalStatsPanel state={state} />
+        <CharacterStatsPanel state={state} />
         <AchievementsPanel />
 
         <div style={{ marginTop: '1em', textAlign: 'center' }}>
@@ -167,6 +169,52 @@ export default function Shop({ onClose }) {
         <div style={{ marginTop: '0.8em', textAlign: 'center', color: '#b69ad8', fontSize: '0.82em', letterSpacing: 2 }}>
           {t('shop.hint') || 'L\'or se gagne en tuant des ennemis · ÉCHAP / B pour fermer'}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CharacterStatsPanel({ state }) {
+  const cs = state?.charStats;
+  if (!cs || Object.keys(cs).length === 0) return null;
+  const fmt = t => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  const entries = Object.entries(CHARACTERS).map(([id, ch]) => ({
+    id, ch, stats: cs[id] || { runs: 0, wins: 0, kills: 0, bestTime: 0, evolutions: 0 },
+  })).filter(x => x.stats.runs > 0);
+  if (entries.length === 0) return null;
+  return (
+    <div style={{
+      marginTop: '1em',
+      background: 'rgba(8,0,22,0.78)',
+      border: '1px solid rgba(135,221,255,0.35)',
+      borderRadius: 6,
+      padding: '0.9em 1.1em',
+    }}>
+      <div style={{
+        color: '#88ddff', fontSize: '0.91em', letterSpacing: 4,
+        textAlign: 'center', marginBottom: '0.7em',
+      }}>👥 STATS PAR PERSONNAGE</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(15em, 1fr))', gap: '0.5em' }}>
+        {entries.map(({ id, ch, stats }) => (
+          <div key={id} style={{
+            background: 'rgba(8,0,22,0.6)',
+            border: `1px solid ${ch.color}55`,
+            borderRadius: 4,
+            padding: '0.5em 0.7em',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4em', marginBottom: '0.35em' }}>
+              <span style={{ fontSize: '1.4em' }}>{ch.icon}</span>
+              <span style={{ color: ch.color, fontSize: '0.92em', letterSpacing: 1 }}>{ch.name}</span>
+            </div>
+            <div style={{ fontSize: '0.78em', color: '#b89ec4', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.2em 0.6em' }}>
+              <span>Runs : <strong style={{ color: '#e0aaff' }}>{stats.runs}</strong></span>
+              <span>Wins : <strong style={{ color: '#ffd966' }}>{stats.wins}</strong></span>
+              <span>Kills : <strong style={{ color: '#ff8844' }}>{stats.kills.toLocaleString()}</strong></span>
+              <span>Évols : <strong style={{ color: '#80ffdb' }}>{stats.evolutions}</strong></span>
+              <span style={{ gridColumn: '1 / -1' }}>Best : <strong style={{ color: '#88ddff' }}>{fmt(stats.bestTime || 0)}</strong></span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

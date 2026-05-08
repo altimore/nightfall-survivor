@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { SKILLS, MODES, BIOMES, BIOME_LIST } from '../game/data.js';
-import { CHARACTERS, CHARACTER_LIST } from '../game/characters.js';
+import { CHARACTERS, CHARACTER_LIST, isCharacterUnlocked } from '../game/characters.js';
 import { getDailyConfig, loadDailyState } from '../game/daily.js';
 import { MenuBg } from './SceneBg.jsx';
 import { useGamepadActions } from './useGamepad.js';
@@ -107,35 +107,45 @@ export default function Menu({ onStart, onStartDaily, weapon, onWeaponChange, mo
             <div style={{ display: 'flex', gap: '0.4em', justifyContent: 'center', flexWrap: 'wrap' }}>
               {CHARACTER_LIST.map(id => {
                 const ch = CHARACTERS[id];
+                const unlocked = isCharacterUnlocked(id);
                 const active = character === id;
+                const lockLabel = ch.unlock?.label;
                 return (
                   <button
                     key={id}
-                    onClick={() => { if (id !== character) playSfx('uimove'); onCharacterChange(id); }}
+                    onClick={() => {
+                      if (!unlocked) { playSfx('hit'); return; }
+                      if (id !== character) playSfx('uimove');
+                      onCharacterChange(id);
+                    }}
                     onMouseDown={e => e.preventDefault()}
                     tabIndex={-1}
-                    title={ch.desc}
+                    title={unlocked ? ch.desc : `🔒 ${lockLabel || 'Verrouillé'}`}
                     style={{
                       padding: '0.45em 0.7em',
-                      background: active ? `${ch.color}22` : 'rgba(8,0,22,0.6)',
-                      border: `1px solid ${active ? ch.color : '#4a1d6a'}`,
-                      color: active ? ch.color : '#9d4edd',
+                      background: !unlocked ? 'rgba(20,8,30,0.55)' : (active ? `${ch.color}22` : 'rgba(8,0,22,0.6)'),
+                      border: `1px solid ${!unlocked ? '#3a1d4a' : (active ? ch.color : '#4a1d6a')}`,
+                      color: !unlocked ? '#5a3a7a' : (active ? ch.color : '#9d4edd'),
                       fontFamily: "'Cinzel',serif", fontSize: '0.85em', letterSpacing: 1,
-                      cursor: 'pointer', borderRadius: 4,
+                      cursor: unlocked ? 'pointer' : 'not-allowed', borderRadius: 4,
                       boxShadow: active ? `0 0 14px ${ch.color}66` : 'none',
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15em',
                       minWidth: '5.5em',
+                      opacity: unlocked ? 1 : 0.55,
+                      filter: unlocked ? 'none' : 'grayscale(0.85)',
                     }}
                   >
-                    <span style={{ fontSize: '1.45em' }}>{ch.icon}</span>
-                    <span>{ch.name}</span>
+                    <span style={{ fontSize: '1.45em' }}>{unlocked ? ch.icon : '🔒'}</span>
+                    <span>{unlocked ? ch.name : '???'}</span>
                   </button>
                 );
               })}
             </div>
             {character && CHARACTERS[character]?.desc && (
               <div style={{ color: '#b89ec4', fontSize: '0.78em', marginTop: 6, letterSpacing: 1, textAlign: 'center' }}>
-                {CHARACTERS[character].desc}
+                {isCharacterUnlocked(character)
+                  ? CHARACTERS[character].desc
+                  : <span style={{ color: '#9d4edd' }}>🔒 {CHARACTERS[character].unlock?.label || 'Verrouillé'}</span>}
               </div>
             )}
           </div>
