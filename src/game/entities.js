@@ -355,6 +355,8 @@ export class Enemy {
     const final = amount * r;
     if (final <= 0) return 0;
     this.hp -= final;
+    // Hit flash for visual punch
+    this.hitFlash = 0.15;
     const tplFn = STATUS_TEMPLATES[type];
     if (tplFn && r > 0) {
       const tpl = tplFn();
@@ -410,6 +412,7 @@ export class Enemy {
     g.clear();
     g.x = this.x; g.y = this.y;
     this.bob += 0.12;
+    if (this.hitFlash > 0) this.hitFlash -= 1 / 60; // approx — decremented every frame
     const hpRatio = this.hp / this.maxHp;
 
     // Elite enemies: pulsing golden aura under the body
@@ -518,6 +521,12 @@ export class Enemy {
       }
     }
 
+    // Hit flash overlay (white silhouette pulse on damage)
+    if (this.hitFlash > 0) {
+      const a = Math.min(0.6, this.hitFlash * 4);
+      g.fillStyle(0xffffff, a);
+      g.fillCircle(0, 0, this.size * 1.15);
+    }
     // HP bar — visible whenever the enemy has taken damage. Bigger enemies get
     // a wider bar; small ones get a slim one above their head.
     if (this.hp < this.maxHp || this.type === 'boss') {

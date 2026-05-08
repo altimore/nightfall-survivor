@@ -44,6 +44,7 @@ export function loadMeta() {
       gold: typeof parsed.gold === 'number' ? Math.max(0, parsed.gold) : 0,
       upgrades: typeof parsed.upgrades === 'object' && parsed.upgrades ? parsed.upgrades : {},
       stats: { ...DEFAULT_STATE.stats, ...(parsed.stats || {}) },
+      charStats: typeof parsed.charStats === 'object' && parsed.charStats ? parsed.charStats : {},
     };
   } catch (_) {
     return { ...DEFAULT_STATE, stats: { ...DEFAULT_STATE.stats } };
@@ -56,8 +57,24 @@ export function saveMeta(state) {
       gold: Math.floor(state.gold || 0),
       upgrades: state.upgrades || {},
       stats: state.stats || { ...DEFAULT_STATE.stats },
+      charStats: state.charStats || {},
     }));
   } catch (_) {}
+}
+
+// Per-character stats : { [charId]: { runs, wins, kills, bestTime, evolutions } }
+export function recordCharacterRun(charId, runData) {
+  const state = loadMeta();
+  state.charStats = state.charStats || {};
+  const cs = state.charStats[charId] || { runs: 0, wins: 0, kills: 0, bestTime: 0, evolutions: 0 };
+  cs.runs += 1;
+  cs.kills += runData.kills || 0;
+  cs.evolutions += runData.evolutions || 0;
+  if (runData.victory) cs.wins += 1;
+  if ((runData.time || 0) > cs.bestTime) cs.bestTime = runData.time;
+  state.charStats[charId] = cs;
+  saveMeta(state);
+  return cs;
 }
 
 // Record a finished run's stats. `runData` shape: { kills, time, goldEarned, combo, victory, evolutions, bossKills, endlessTier }

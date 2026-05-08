@@ -5,7 +5,7 @@ import { slv, xpFor, getChoices, refreshStats, WAVES, ITEMS, ITEM_DURATIONS, ITE
 import { initAudio, playSfx, startMusic, stopMusic, setMuted, playBossWarning } from '../audio.js';
 import { bus } from '../bus.js';
 import { getOptions } from '../PhaserGame.js';
-import { applyMetaToPlayer, addGold, recordRun } from '../meta.js';
+import { applyMetaToPlayer, addGold, recordRun, recordCharacterRun } from '../meta.js';
 import { CHARACTERS } from '../characters.js';
 import { checkAchievements, ACHIEVEMENTS } from '../achievements.js';
 import { recordDaily } from '../daily.js';
@@ -1340,6 +1340,9 @@ export default class GameScene extends Phaser.Scene {
       victory,
     };
     const updatedStats = recordRun(runRecord);
+    // Per-character stats (use the main player's chosen class)
+    const charId = this.players?.[0]?.character || 'vampire';
+    try { recordCharacterRun(charId, runRecord); } catch (_) {}
     // Daily challenge tracking
     const opts = getOptions();
     if (opts?.daily) recordDaily(runRecord);
@@ -1659,7 +1662,9 @@ export default class GameScene extends Phaser.Scene {
       for (const pl of this.players) {
         if (pl.dead) continue;
         if (!shielded && pl.iframes <= 0 && Math.hypot(e.x - pl.x, e.y - pl.y) < e.size + 14) {
-          pl.hp -= e.dmg * this.fragility;
+          const dmgTaken = e.dmg * this.fragility;
+          pl.hp -= dmgTaken;
+          this.fxPlayerDamage(pl.x, pl.y, dmgTaken);
           pl.iframes = 0.9;
           playSfx('hit');
           this.shake(0.007, 130);
@@ -1796,7 +1801,9 @@ export default class GameScene extends Phaser.Scene {
         for (const pl of this.players) {
           if (pl.dead || pl.iframes > 0) continue;
           if (Math.hypot(ep.x - pl.x, ep.y - pl.y) < 15) {
-            pl.hp -= ep.dmg * this.fragility;
+            const dmgTaken = ep.dmg * this.fragility;
+            pl.hp -= dmgTaken;
+            this.fxPlayerDamage(pl.x, pl.y, dmgTaken);
             pl.iframes = 0.7;
             playSfx('hit');
             this.comboCount = Math.floor((this.comboCount || 0) / 2);
@@ -2107,10 +2114,11 @@ export default class GameScene extends Phaser.Scene {
       terrainSpeedMul = terrain.cfg.speedMul;
       // Damage / status from fire / poison patches.
       if (terrain.cfg.dps > 0) {
-        p.hp -= terrain.cfg.dps * dt;
-        if (terrain.cfg.status === 'burning' && p.hp > 0 && Math.random() < dt * 2) {
-          // small spark fx
-          this.fxDamage?.(p.x, p.y, terrain.cfg.dps * dt, false);
+        const dpsTaken = terrain.cfg.dps * dt;
+        p.hp -= dpsTaken;
+        // Aggregate ticks visually : show a popup ~3× per second
+        if (Math.random() < dt * 3) {
+          this.fxPlayerDamage(p.x, p.y, terrain.cfg.dps * 0.3);
         }
       }
       // Ice "slip": apply momentum-style movement (smooth velocity instead of direct set).
@@ -3930,11 +3938,109 @@ export default class GameScene extends Phaser.Scene {
     return total;
   }
 
+  // Kind-specific boss patterns: each boss kind has a signature attack.
+  fireKindSpecific(e, p, dmg, col) {
+    const speed = 130;
+    if (e.kind === 'frost') {
+      // Cone of ice shards converging toward the player
+      const baseA = Math.atan2(p.y - e.y, p.x - e.x);
+      for (let i = -3; i <= 3; i++) {
+        const a = baseA + i * 0.12;
+        const sp = speed * 0.95;
+        this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp, dmg * 0.85, col, 8));
+      }
+      // Slow trailing crystal bomb
+      this.time.delayedCall(280, () => {
+        if (e.hp <= 0) return;
+        const a = Math.atan2(p.y - e.y, p.x - e.x);
+        this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.45, Math.sin(a) * speed * 0.45, dmg * 1.4, col, 11));
+      });
+      return;
+    }
+    if (e.kind === 'inferno') {
+      // Spiraling fire ring expanding from boss center
+      const offset = (e.shootCount || 0) * 0.22;
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + offset;
+        this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.85, Math.sin(a) * speed * 0.85, dmg * 0.85, col, 6));
+      }
+      // Fast follow-up at +30° staggered
+      this.time.delayedCall(220, () => {
+        if (e.hp <= 0) return;
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2 + offset + Math.PI / 12;
+          this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 1.3, Math.sin(a) * speed * 1.3, dmg * 0.7, col, 5));
+        }
+      });
+      return;
+    }
+    if (e.kind === 'void') {
+      // 3-4 portals spawning bullets at random points around player
+      const portals = 4;
+      for (let i = 0; i < portals; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = 100 + Math.random() * 80;
+        const px = p.x + Math.cos(a) * d;
+        const py = p.y + Math.sin(a) * d;
+        // visual rift telegraph
+        const tg = this.add.graphics().setDepth(11);
+        tg.lineStyle(2, col, 0.85); tg.strokeCircle(px, py, 18);
+        tg.fillStyle(col, 0.25); tg.fillCircle(px, py, 18);
+        this.tweens.add({ targets: tg, alpha: 0, duration: 600, onComplete: () => tg.destroy() });
+        this.time.delayedCall(450, () => {
+          if (e.hp <= 0) return;
+          const dir = Math.atan2(p.y - py, p.x - px);
+          this.eprojectiles.push(new EnemyProjectile(this, px, py, Math.cos(dir) * speed * 1.1, Math.sin(dir) * speed * 1.1, dmg, col, 7));
+        });
+      }
+      return;
+    }
+    if (e.kind === 'summoner') {
+      // Summon 2-3 weak adds in a small arc + slow projectile barrage
+      const adds = 2 + (Math.random() < 0.5 ? 1 : 0);
+      const types = ['skeleton', 'wraith', 'witch', 'slime'];
+      for (let i = 0; i < adds; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const ax = e.x + Math.cos(a) * 30, ay = e.y + Math.sin(a) * 30;
+        const t = types[Math.floor(Math.random() * types.length)];
+        this.enemies.push(new Enemy(this, ax, ay, t, 1.2, 1, 1));
+      }
+      // Slow projectile cone
+      const baseA = Math.atan2(p.y - e.y, p.x - e.x);
+      for (let i = -1; i <= 1; i++) {
+        const a = baseA + i * 0.25;
+        this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 0.7, Math.sin(a) * speed * 0.7, dmg * 0.85, col, 6));
+      }
+      return;
+    }
+    if (e.kind === 'phoenix') {
+      // 4 fire spirals expanding outward (DBZ-style)
+      const offset = (e.shootCount || 0) * 0.17;
+      for (let arm = 0; arm < 4; arm++) {
+        const armA = (arm / 4) * Math.PI * 2 + offset;
+        for (let i = 0; i < 4; i++) {
+          this.time.delayedCall(i * 90, () => {
+            if (e.hp <= 0) return;
+            const a = armA + i * 0.4;
+            this.eprojectiles.push(new EnemyProjectile(this, e.x, e.y, Math.cos(a) * speed * 1.05, Math.sin(a) * speed * 1.05, dmg * 0.85, col, 6));
+          });
+        }
+      }
+      return;
+    }
+  }
+
   fireBossPattern(e, p, pattern) {
     const speed = 130;
     const r = 7;
     const dmg = e.dmg;
     const col = e.projCol ?? 0xff4400;
+
+    // Kind-specific pattern intercalé toutes les 3 attaques (varie selon le boss)
+    if ((e.shootCount || 0) % 3 === 0 && e.kind && e.kind !== 'shadow') {
+      this.fireKindSpecific(e, p, dmg, col);
+      return;
+    }
     switch (pattern) {
       case 0: { // 8-pointed star burst
         for (let i = 0; i < 8; i++) {
@@ -4263,6 +4369,34 @@ export default class GameScene extends Phaser.Scene {
         });
       });
     }
+  }
+
+  // Red bouncing damage popup for the player. Throttled to avoid spam from terrain DoT.
+  fxPlayerDamage(x, y, amount) {
+    if (amount < 0.5) return;
+    this._lastPlayerDmgT = this._lastPlayerDmgT || 0;
+    if (this.elapsed - this._lastPlayerDmgT < 0.12) return;
+    this._lastPlayerDmgT = this.elapsed;
+    const value = Math.max(1, Math.round(amount));
+    const offX = (Math.random() - 0.5) * 16;
+    const t = this.add.text(x + offX, y - 14, `-${value}`, {
+      fontFamily: "'Cinzel', serif",
+      fontSize: '15px',
+      color: '#ff4d6d',
+      stroke: '#1a0010',
+      strokeThickness: 3,
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(40);
+    this.tweens.add({
+      targets: t,
+      y: y - 50,
+      x: x + offX + (Math.random() - 0.5) * 30,
+      alpha: 0,
+      scale: 1.15,
+      duration: 700,
+      ease: 'Cubic.out',
+      onComplete: () => t.destroy(),
+    });
   }
 
   fxGoldPop(x, y, amount) {
