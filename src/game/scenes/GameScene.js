@@ -29,175 +29,593 @@ const BOSS_NAMES = [
 // ────────────────────────────────────────
 function drawDecor(g, cx, cy, type, hash, biomeId) {
   const variant = (hash >>> 16) & 0xff;
+  const sub = (hash >>> 24) & 0x07;
   if (biomeId === 'forest') {
-    switch (type) {
-      case 0: drawDeadTree(g, cx, cy, variant); break;
-      case 1: drawDeadTree(g, cx, cy, variant); break;
-      case 2: drawMushroom(g, cx, cy, variant); break;
-      default: drawStones(g, cx, cy, variant);
-    }
+    if (type === 0) drawDeadTree(g, cx, cy, variant);
+    else if (type === 1) drawForestPine(g, cx, cy, variant);
+    else if (type === 2) {
+      if (sub < 3) drawMushroomCluster(g, cx, cy, variant);
+      else drawFernBush(g, cx, cy, variant);
+    } else drawLogStump(g, cx, cy, variant);
     return;
   }
   if (biomeId === 'dungeon') {
-    switch (type) {
-      case 0: drawBrokenPillar(g, cx, cy, variant); break;
-      case 1: drawTorch(g, cx, cy, variant); break;
-      case 2: drawStones(g, cx, cy, variant); break;
-      default: drawBrokenPillar(g, cx, cy, variant);
+    if (type === 0) drawBrokenPillar(g, cx, cy, variant);
+    else if (type === 1) drawTorch(g, cx, cy, variant);
+    else if (type === 2) {
+      if (sub < 4) drawBoneHeap(g, cx, cy, variant);
+      else drawStoneFloorTiles(g, cx, cy, variant);
     }
+    else drawIronCage(g, cx, cy, variant);
     return;
   }
   if (biomeId === 'abyss') {
-    switch (type) {
-      case 0: drawCrystal(g, cx, cy, variant); break;
-      case 1: drawVoidRift(g, cx, cy, variant); break;
-      case 2: drawCrystal(g, cx, cy, variant); break;
-      default: drawStones(g, cx, cy, variant);
-    }
+    if (type === 0) drawCrystalCluster(g, cx, cy, variant);
+    else if (type === 1) drawVoidRift(g, cx, cy, variant);
+    else if (type === 2) drawFloatingShard(g, cx, cy, variant);
+    else drawStarRing(g, cx, cy, variant);
     return;
   }
   // cemetery (default)
-  switch (type) {
-    case 0: drawCross(g, cx, cy, variant); break;
-    case 1: drawTombstone(g, cx, cy, variant); break;
-    case 2: drawDeadTree(g, cx, cy, variant); break;
-    default: drawStones(g, cx, cy, variant);
+  if (type === 0) drawCross(g, cx, cy, variant);
+  else if (type === 1) {
+    if (sub < 4) drawTombstone(g, cx, cy, variant);
+    else drawSarcophagus(g, cx, cy, variant);
+  }
+  else if (type === 2) drawDeadTree(g, cx, cy, variant);
+  else drawWitherFlowers(g, cx, cy, variant);
+}
+
+// ────────── Forest ──────────
+function drawMushroomCluster(g, cx, cy, v) {
+  const positions = [
+    { x: 0, y: 0, h: 14 + (v & 0x07), red: true },
+    { x: -7, y: 3, h: 9 + ((v >> 2) & 0x05), red: false },
+    { x: 6, y: 4, h: 11 + ((v >> 4) & 0x06), red: ((v >> 5) & 1) === 0 },
+  ];
+  // shared shadow
+  g.fillStyle(0x000000, 0.35);
+  g.fillEllipse(cx, cy + 5, 22, 6);
+  for (const m of positions) {
+    const sx = cx + m.x, sy = cy + m.y;
+    // stem with subtle gradient (2 layers)
+    g.fillStyle(0xa89878, 0.9); g.fillRect(sx - 2.2, sy - m.h, 4.4, m.h);
+    g.fillStyle(0xd8c8a8, 0.95); g.fillRect(sx - 1.5, sy - m.h, 2.5, m.h);
+    // cap (red or green)
+    const capCol = m.red ? 0x9a1818 : 0x3a7a3a;
+    const capLight = m.red ? 0xd83838 : 0x6abb5a;
+    g.fillStyle(0x000000, 0.5);
+    g.fillEllipse(sx, sy - m.h, 18, 9);
+    g.fillStyle(capCol, 0.95);
+    g.fillEllipse(sx, sy - m.h - 1, 16, 8);
+    g.fillStyle(capLight, 0.7);
+    g.fillEllipse(sx - 2, sy - m.h - 2.5, 9, 4);
+    // spots
+    g.fillStyle(0xfff0d8, 0.95);
+    g.fillCircle(sx - 4, sy - m.h - 1.5, 1.6);
+    g.fillCircle(sx + 3, sy - m.h - 0.5, 1.3);
+    g.fillCircle(sx, sy - m.h + 1.5, 0.9);
   }
 }
 
-// Forest mushroom : red cap with white spots
-function drawMushroom(g, cx, cy, v) {
-  const h = 14 + (v & 0x07);
-  g.fillStyle(0x000000, 0.3); g.fillEllipse(cx, cy + 4, 14, 4);
-  // stem
-  g.fillStyle(0xd8c8a8, 0.85); g.fillRect(cx - 2, cy - h, 4, h);
-  // cap
-  g.fillStyle(0x8a1a1a, 0.85); g.fillEllipse(cx, cy - h, 18, 9);
-  // spots
-  g.fillStyle(0xfff0d8, 0.85);
-  g.fillCircle(cx - 4, cy - h - 1, 1.5);
-  g.fillCircle(cx + 4, cy - h, 1.4);
-  g.fillCircle(cx - 1, cy - h + 2, 1);
+function drawFernBush(g, cx, cy, v) {
+  const w = 22 + (v & 0x07);
+  // shadow
+  g.fillStyle(0x000000, 0.3); g.fillEllipse(cx, cy + 3, w, 5);
+  // base bush
+  g.fillStyle(0x1a3a1a, 0.9);
+  g.fillEllipse(cx, cy - 2, w, 12);
+  g.fillStyle(0x2a5a2a, 0.85);
+  g.fillEllipse(cx - 2, cy - 4, w * 0.85, 10);
+  // fronds (3 to 4 leaves on stems)
+  const fronds = 4 + (v & 0x01);
+  g.lineStyle(1.5, 0x3a6a3a, 0.85);
+  for (let i = 0; i < fronds; i++) {
+    const a = -Math.PI + (i / (fronds - 1)) * Math.PI;
+    const len = 10 + ((v >> i) & 0x05);
+    const ex = cx + Math.cos(a) * len;
+    const ey = cy + Math.sin(a) * len * 0.7 - 4;
+    g.beginPath();
+    g.moveTo(cx, cy - 4);
+    g.lineTo(ex, ey);
+    g.strokePath();
+    // small leaf
+    g.fillStyle(0x4a8a4a, 0.85);
+    g.fillEllipse(ex, ey, 3, 1.6);
+  }
+  // small berries
+  g.fillStyle(0x6a1a3a, 1);
+  g.fillCircle(cx + 4, cy - 5, 1.4);
+  g.fillCircle(cx - 5, cy - 3, 1.2);
 }
 
-// Dungeon broken pillar : stacked stones + cracked top
+function drawLogStump(g, cx, cy, v) {
+  const w = 14 + (v & 0x07);
+  g.fillStyle(0x000000, 0.35); g.fillEllipse(cx, cy + 3, w + 4, 5);
+  // dark base
+  g.fillStyle(0x1a0c04, 0.95);
+  g.fillEllipse(cx, cy + 1, w, 7);
+  // top
+  g.fillStyle(0x4a2a14, 1);
+  g.fillEllipse(cx, cy - 2, w, 7);
+  g.fillStyle(0x6a3a20, 1);
+  g.fillEllipse(cx - 1, cy - 2, w * 0.9, 6);
+  // rings
+  g.lineStyle(1, 0x2a1808, 0.7);
+  g.strokeEllipse(cx, cy - 2, w * 0.65, 4.2);
+  g.strokeEllipse(cx, cy - 2, w * 0.35, 2.4);
+  g.fillStyle(0x2a1808, 0.8);
+  g.fillCircle(cx, cy - 2, 1);
+  // moss
+  g.fillStyle(0x3a6a2a, 0.8);
+  g.fillEllipse(cx + w * 0.45, cy - 2, 4, 1.8);
+  g.fillEllipse(cx - w * 0.4, cy + 0.5, 3, 1.4);
+}
+
+function drawForestPine(g, cx, cy, v) {
+  const h = 38 + (v & 0x0f);
+  g.fillStyle(0x000000, 0.35); g.fillEllipse(cx, cy + 4, 16, 5);
+  // trunk
+  g.fillStyle(0x2a1808, 1);
+  g.fillRect(cx - 2.5, cy - 8, 5, 12);
+  // 4 layers of foliage (triangles)
+  const layers = [
+    { y: -8, w: 16, dark: 0x143a1a, light: 0x2a6a2a },
+    { y: -16, w: 14, dark: 0x143a1a, light: 0x2a6a2a },
+    { y: -24, w: 12, dark: 0x143a1a, light: 0x386a30 },
+    { y: -32, w: 9, dark: 0x143a1a, light: 0x386a30 },
+  ];
+  for (let i = 0; i < layers.length && i < 4; i++) {
+    const L = layers[i];
+    if (-L.y > h) continue;
+    g.fillStyle(L.dark, 0.95);
+    g.fillTriangle(cx - L.w, cy + L.y, cx + L.w, cy + L.y, cx, cy + L.y - 14);
+    g.fillStyle(L.light, 0.8);
+    g.fillTriangle(cx - L.w * 0.7, cy + L.y - 1, cx + L.w * 0.7, cy + L.y - 1, cx, cy + L.y - 11);
+  }
+}
+
+// ────────── Dungeon ──────────
 function drawBrokenPillar(g, cx, cy, v) {
-  const h = 22 + (v & 0x0f);
-  g.fillStyle(0x000000, 0.35); g.fillEllipse(cx, cy + 5, 20, 5);
-  g.fillStyle(0x4a3a2a, 0.85);
-  g.fillRect(cx - 8, cy - 6, 16, 6); // base
-  g.fillStyle(0x6a5a3a, 0.7);
-  g.fillRect(cx - 7, cy - h * 0.5, 14, 6); // mid
-  g.fillStyle(0x4a3a2a, 0.65);
-  g.fillRect(cx - 6, cy - h, 12, 6); // top broken
-  // crack
-  g.lineStyle(1, 0x222218, 0.6);
-  g.beginPath(); g.moveTo(cx - 4, cy - h + 2); g.lineTo(cx + 3, cy - h + 6); g.strokePath();
+  const h = 28 + (v & 0x0f);
+  g.fillStyle(0x000000, 0.5);
+  g.fillEllipse(cx, cy + 6, 26, 7);
+  // 3-4 stacked stone blocks with gaps
+  const blocks = 3 + ((v >> 4) & 0x01);
+  for (let i = 0; i < blocks; i++) {
+    const blockH = h / blocks;
+    const w = 18 - i * 2 + ((v >> i) & 0x03);
+    const tilt = i === blocks - 1 ? ((v >> 5) & 1 ? 1 : -1) * 2 : 0;
+    const y = cy - i * blockH;
+    // shadow side
+    g.fillStyle(0x2a2218, 1);
+    g.fillRect(cx - w / 2, y - blockH, w, blockH);
+    // light face
+    g.fillStyle(0x6a5a40, 1);
+    g.fillRect(cx - w / 2 + 1, y - blockH + 1, w - 3, blockH - 2);
+    g.fillStyle(0x8a7a58, 0.8);
+    g.fillRect(cx - w / 2 + 2, y - blockH + 2, (w - 5) * 0.6, blockH - 4);
+    // crack on the side
+    g.lineStyle(1, 0x1a1208, 0.8);
+    if ((v >> i) & 1) {
+      g.beginPath(); g.moveTo(cx - w * 0.3, y - blockH + 2); g.lineTo(cx - w * 0.2, y - 2); g.strokePath();
+    }
+    // joint shadow between blocks
+    g.fillStyle(0x000000, 0.55);
+    g.fillRect(cx - w / 2 + 1, y - 1, w - 2, 1);
+  }
+  // top broken edge (zig-zag)
+  const topY = cy - h;
+  const topW = 15;
+  g.fillStyle(0x4a3a28, 1);
+  g.fillTriangle(cx - topW / 2, topY + 4, cx - topW / 4, topY + 1, cx, topY + 4);
+  g.fillTriangle(cx, topY + 4, cx + topW / 4, topY - 1, cx + topW / 2, topY + 4);
 }
 
-// Dungeon torch : pole + flame
 function drawTorch(g, cx, cy, v) {
-  const h = 26 + (v & 0x0f);
-  g.fillStyle(0x000000, 0.35); g.fillEllipse(cx, cy + 4, 10, 3);
-  g.fillStyle(0x2a1810, 0.85); g.fillRect(cx - 1.5, cy - h, 3, h);
-  // flame
-  const flick = (v & 0x07) / 7;
-  g.fillStyle(0xff6633, 0.7);
-  g.fillTriangle(cx - 4, cy - h + 2, cx, cy - h - 7 - flick * 2, cx + 4, cy - h + 2);
-  g.fillStyle(0xffaa44, 0.95);
-  g.fillTriangle(cx - 2.5, cy - h + 1, cx, cy - h - 5 - flick, cx + 2.5, cy - h + 1);
-}
-
-// Abyss crystal : floating tinted shard
-function drawCrystal(g, cx, cy, v) {
-  const h = 16 + (v & 0x0f);
-  g.fillStyle(0x000000, 0.3); g.fillEllipse(cx, cy + 4, 12, 3);
-  g.fillStyle(0x4438aa, 0.85);
-  g.fillTriangle(cx - 6, cy - 3, cx + 6, cy - 3, cx, cy - h);
-  g.fillStyle(0x8870ff, 0.7);
-  g.fillTriangle(cx - 3, cy - 6, cx + 3, cy - 6, cx, cy - h + 2);
+  const h = 30 + (v & 0x0f);
+  g.fillStyle(0x000000, 0.45); g.fillEllipse(cx, cy + 4, 11, 4);
+  // bracket on a wall (small mount)
+  g.fillStyle(0x3a2410, 1);
+  g.fillRect(cx - 4, cy - 3, 8, 4);
+  // pole with grain
+  g.fillStyle(0x1a0e04, 1); g.fillRect(cx - 1.6, cy - h, 3.2, h);
+  g.fillStyle(0x3a1f08, 1); g.fillRect(cx - 0.7, cy - h, 1.4, h);
+  // basin
+  g.fillStyle(0x5a3a18, 1);
+  g.fillRect(cx - 4, cy - h - 2, 8, 4);
+  g.fillStyle(0x8a5a28, 0.85);
+  g.fillRect(cx - 3, cy - h - 1, 6, 2);
+  // flame: 3 layers
+  const flick = ((v & 0x07) / 7) * 3;
+  g.fillStyle(0xff3300, 0.65);
+  g.fillTriangle(cx - 6, cy - h - 1, cx, cy - h - 14 - flick, cx + 6, cy - h - 1);
+  g.fillStyle(0xff8800, 0.85);
+  g.fillTriangle(cx - 4, cy - h - 1, cx, cy - h - 11 - flick, cx + 4, cy - h - 1);
+  g.fillStyle(0xffe066, 1);
+  g.fillTriangle(cx - 2, cy - h - 1, cx, cy - h - 7 - flick, cx + 2, cy - h - 1);
   // glow
-  g.lineStyle(1, 0xa090ff, 0.55);
-  g.strokeCircle(cx, cy - h * 0.55, h * 0.55);
+  g.fillStyle(0xffaa44, 0.18);
+  g.fillCircle(cx, cy - h - 7, 18);
 }
 
-// Abyss void rift : dark cloud + purple core
-function drawVoidRift(g, cx, cy, v) {
-  const r = 14 + (v & 0x07);
-  g.fillStyle(0x000000, 0.55);
-  g.fillEllipse(cx, cy, r * 1.3, r);
-  g.fillStyle(0x180828, 0.9);
-  g.fillEllipse(cx, cy, r, r * 0.7);
+function drawBoneHeap(g, cx, cy, v) {
+  // shadow
+  g.fillStyle(0x000000, 0.4); g.fillEllipse(cx, cy + 4, 24, 6);
+  // skull
+  g.fillStyle(0xe8e0d0, 1);
+  g.fillCircle(cx + 4, cy - 4, 6);
+  g.fillStyle(0x1a1a1a, 1);
+  g.fillCircle(cx + 2, cy - 4, 1.4);
+  g.fillCircle(cx + 6, cy - 4, 1.4);
+  g.fillRect(cx + 2, cy - 1, 4, 1.5);
+  // jaw
+  g.fillStyle(0xc0b8a0, 0.85);
+  g.fillEllipse(cx + 4, cy + 1, 5, 2);
+  // long bones crossed
+  g.lineStyle(2.5, 0xd8d0b8, 1);
+  g.beginPath(); g.moveTo(cx - 9, cy + 5); g.lineTo(cx + 7, cy - 1); g.strokePath();
+  g.beginPath(); g.moveTo(cx - 9, cy - 1); g.lineTo(cx + 7, cy + 5); g.strokePath();
+  // bone heads
+  g.fillStyle(0xe8e0d0, 1);
+  g.fillCircle(cx - 9, cy + 5, 1.5);
+  g.fillCircle(cx + 7, cy + 5, 1.5);
+  g.fillCircle(cx - 9, cy - 1, 1.5);
+  g.fillCircle(cx + 7, cy - 1, 1.5);
+}
+
+function drawStoneFloorTiles(g, cx, cy, v) {
+  // 4 tiles forming a ground patch
+  const tileSize = 16;
+  for (let i = -1; i <= 0; i++) {
+    for (let j = -1; j <= 0; j++) {
+      const tx = cx + i * tileSize + tileSize / 2;
+      const ty = cy + j * tileSize + tileSize / 2;
+      const variant = (v >> (i + j * 2 + 4)) & 0x07;
+      g.fillStyle(0x2a2418 + variant * 0x101010, 0.7);
+      g.fillRect(tx - tileSize / 2 + 1, ty - tileSize / 2 + 1, tileSize - 2, tileSize - 2);
+      g.lineStyle(1, 0x000000, 0.5);
+      g.strokeRect(tx - tileSize / 2 + 1, ty - tileSize / 2 + 1, tileSize - 2, tileSize - 2);
+    }
+  }
+}
+
+function drawIronCage(g, cx, cy, v) {
+  const h = 26 + (v & 0x07);
+  g.fillStyle(0x000000, 0.5); g.fillEllipse(cx, cy + 4, 18, 5);
+  // chain hanging
+  g.lineStyle(1.5, 0x444444, 0.85);
+  for (let i = 0; i < 3; i++) {
+    g.strokeCircle(cx - 6 + i * 6, cy - h - 4 + (i % 2) * 2, 2);
+  }
+  // cage base ring
+  g.fillStyle(0x2a2a2a, 1);
+  g.fillEllipse(cx, cy - 2, 20, 6);
+  // bars
+  g.lineStyle(1.5, 0x444444, 1);
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + (i / 4) * Math.PI;
+    const x1 = cx + Math.cos(a) * 9;
+    const x2 = cx + Math.cos(a) * 6;
+    g.beginPath(); g.moveTo(x1, cy - 2); g.lineTo(x2, cy - h); g.strokePath();
+  }
+  // cage top
+  g.fillStyle(0x2a2a2a, 1);
+  g.fillEllipse(cx, cy - h, 14, 4);
+  // hook
+  g.lineStyle(2, 0x444444, 1);
+  g.beginPath(); g.moveTo(cx, cy - h - 2); g.lineTo(cx, cy - h - 8); g.strokePath();
+}
+
+// ────────── Abyss ──────────
+function drawCrystalCluster(g, cx, cy, v) {
+  // base shadow
+  g.fillStyle(0x000000, 0.35); g.fillEllipse(cx, cy + 4, 22, 5);
+  const cluster = [
+    { x: 0, y: 0, h: 22 + (v & 0x07), col: 0x4438aa, light: 0x8870ff },
+    { x: -8, y: 2, h: 14 + ((v >> 2) & 0x05), col: 0x3a30aa, light: 0x7060dd },
+    { x: 7, y: 3, h: 16 + ((v >> 4) & 0x05), col: 0x5a48cc, light: 0xa090ff },
+  ];
+  for (const c of cluster) {
+    const x = cx + c.x, y = cy + c.y;
+    // body (4 facets)
+    g.fillStyle(c.col, 0.95);
+    g.fillTriangle(x - 5, y - 3, x + 5, y - 3, x, y - c.h);
+    g.fillStyle(c.light, 0.75);
+    g.fillTriangle(x - 2.5, y - 5, x + 2.5, y - 5, x, y - c.h + 2);
+    // edge highlight
+    g.lineStyle(1, 0xc0b8ff, 0.65);
+    g.beginPath();
+    g.moveTo(x - 5, y - 3); g.lineTo(x, y - c.h); g.lineTo(x + 5, y - 3); g.strokePath();
+  }
+  // pulsing glow
+  g.fillStyle(0x9080ff, 0.15);
+  g.fillCircle(cx, cy - 10, 18);
+}
+
+function drawFloatingShard(g, cx, cy, v) {
+  // shard floats above ground (no shadow, just a hover indicator)
+  const offset = ((v & 0x07) - 3.5);
+  const x = cx, y = cy - 14 + offset;
+  // small shadow on ground
+  g.fillStyle(0x6850aa, 0.35);
+  g.fillEllipse(cx, cy + 4, 10, 3);
+  // crystal shard (rhombus)
+  g.fillStyle(0x6a58dd, 0.95);
+  g.fillTriangle(x - 4, y, x, y - 8, x + 4, y);
+  g.fillTriangle(x - 4, y, x, y + 6, x + 4, y);
+  g.fillStyle(0xa090ff, 0.85);
+  g.fillTriangle(x - 2, y, x, y - 6, x + 2, y);
   // sparkles
-  g.fillStyle(0xffffff, 0.6);
-  g.fillCircle(cx + Math.sin(v) * r * 0.6, cy + Math.cos(v) * r * 0.5, 0.9);
-  g.fillCircle(cx - Math.sin(v * 1.3) * r * 0.5, cy - Math.cos(v * 1.7) * r * 0.4, 0.9);
+  g.fillStyle(0xffffff, 0.75);
+  g.fillCircle(x - 8, y - 2, 0.8);
+  g.fillCircle(x + 9, y + 1, 0.8);
+  g.fillCircle(x + 6, y - 9, 0.7);
 }
 
+function drawVoidRift(g, cx, cy, v) {
+  const r = 16 + (v & 0x07);
+  // outer dark cloud (3 layers)
+  g.fillStyle(0x000000, 0.65);
+  g.fillEllipse(cx, cy, r * 1.5, r * 1.1);
+  g.fillStyle(0x1a0828, 0.9);
+  g.fillEllipse(cx, cy, r * 1.15, r * 0.85);
+  g.fillStyle(0x381a5a, 0.85);
+  g.fillEllipse(cx, cy, r * 0.85, r * 0.6);
+  // event horizon
+  g.lineStyle(1.5, 0x6840aa, 0.7);
+  g.strokeEllipse(cx, cy, r * 1.2, r * 0.9);
+  // sparkles
+  g.fillStyle(0xffffff, 0.85);
+  for (let i = 0; i < 5; i++) {
+    const a = (v + i * 51) * 0.1;
+    const rr = 0.4 + ((i + v) & 0x03) * 0.2;
+    g.fillCircle(cx + Math.cos(a) * r * rr, cy + Math.sin(a * 1.3) * r * 0.7 * rr, 0.9);
+  }
+  g.fillStyle(0xa080ff, 0.9);
+  g.fillCircle(cx + Math.sin(v * 0.4) * 4, cy, 1.5);
+}
+
+function drawStarRing(g, cx, cy, v) {
+  // Constellation: outer dark void + 5 stars in a circle
+  g.fillStyle(0x000000, 0.5); g.fillEllipse(cx, cy + 4, 26, 6);
+  // dark disc
+  g.fillStyle(0x040414, 0.85);
+  g.fillCircle(cx, cy, 14);
+  // 5 stars on a circle
+  const r = 12;
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + (v & 0x07) * 0.05;
+    const sx = cx + Math.cos(a) * r;
+    const sy = cy + Math.sin(a) * r;
+    // glow
+    g.fillStyle(0xa080ff, 0.45);
+    g.fillCircle(sx, sy, 3);
+    // star
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(sx, sy, 1.2);
+  }
+  // central glow
+  g.fillStyle(0x4438aa, 0.45);
+  g.fillCircle(cx, cy, 4);
+}
+
+// ────────── Cemetery ──────────
 function drawCross(g, cx, cy, v) {
   const tilt = ((v & 0x1f) - 16) * 0.012;
-  const h = 28 + (v & 0x07);
+  const h = 32 + (v & 0x07);
   // ground shadow
-  g.fillStyle(0x000000, 0.35);
-  g.fillEllipse(cx, cy + h * 0.7, h * 0.9, h * 0.25);
-  // post
-  g.fillStyle(0x2a1810, 0.55);
-  g.save?.();
-  // simple tilt approximated by drawing slightly skewed rect
-  g.fillRect(cx - 2, cy - h, 4, h);
+  g.fillStyle(0x000000, 0.45);
+  g.fillEllipse(cx, cy + h * 0.65, h * 0.95, h * 0.25);
+  // small dirt mound
+  g.fillStyle(0x1a0c04, 0.85);
+  g.fillEllipse(cx, cy, 14, 4);
+  // post (with grain)
+  g.fillStyle(0x1a0e04, 1);
+  const px = cx + Math.sin(tilt) * h;
+  const py = cy - h;
+  g.fillTriangle(cx - 2, cy, cx + 2, cy, cx + 2 + Math.sin(tilt) * h, py);
+  g.fillTriangle(cx - 2, cy, cx + 2 + Math.sin(tilt) * h, py, cx - 2 + Math.sin(tilt) * h, py);
+  g.fillStyle(0x2a1810, 1);
+  g.fillRect(cx - 1, cy - h + 4, 2, h - 6);
   // crossbar
-  g.fillRect(cx - 12, cy - h * 0.65, 24, 4);
-  // small decoration knot
-  g.fillStyle(0x3a2418, 0.5);
-  g.fillCircle(cx, cy - h * 0.65 + 2, 2);
+  g.fillStyle(0x1a0e04, 1);
+  g.fillRect(cx - 14, cy - h * 0.65, 28, 5);
+  g.fillStyle(0x3a2418, 1);
+  g.fillRect(cx - 13, cy - h * 0.65 + 1, 26, 3);
+  // knot decoration
+  g.fillStyle(0x4a2818, 0.8);
+  g.fillCircle(cx, cy - h * 0.65 + 2.5, 2.5);
+  g.fillStyle(0x6a3a1c, 0.7);
+  g.fillCircle(cx - 0.5, cy - h * 0.65 + 1.5, 1);
+  // wilted ribbon
+  if ((v & 0x10) === 0) {
+    g.fillStyle(0x4a1a2a, 0.85);
+    g.fillRect(cx - 8, cy - h * 0.65 + 6, 4, 8);
+  }
+  // small candle at the foot
+  if ((v & 0x40) === 0) {
+    g.fillStyle(0xc8b48a, 1);
+    g.fillRect(cx + 6, cy - 4, 2.5, 4);
+    // flame
+    g.fillStyle(0xffe066, 0.95);
+    g.fillTriangle(cx + 5.5, cy - 4, cx + 8, cy - 4, cx + 7.25, cy - 9);
+  }
 }
 
 function drawTombstone(g, cx, cy, v) {
-  const w = 26 + (v & 0x07);
-  const h = 32 + ((v >> 3) & 0x07);
+  const w = 30 + (v & 0x07);
+  const h = 36 + ((v >> 3) & 0x07);
   // shadow
-  g.fillStyle(0x000000, 0.4);
-  g.fillEllipse(cx, cy + 6, w * 1.1, w * 0.3);
-  // back panel (darker)
-  g.fillStyle(0x1a1a25, 0.7);
+  g.fillStyle(0x000000, 0.5);
+  g.fillEllipse(cx, cy + 6, w * 1.15, w * 0.32);
+  // dirt mound at base
+  g.fillStyle(0x2a1808, 0.9);
+  g.fillEllipse(cx, cy + 1, w * 0.95, 5);
+  // back panel (darker, very subtle)
+  g.fillStyle(0x0e0e15, 1);
+  g.fillRoundedRect(cx - w / 2 - 1, cy - h - 1, w + 2, h, w * 0.45);
+  // mid panel
+  g.fillStyle(0x1f1f2c, 1);
   g.fillRoundedRect(cx - w / 2, cy - h, w, h, w * 0.45);
-  // front panel (mid grey, slight offset)
-  g.fillStyle(0x3a3a48, 0.55);
+  // light face
+  g.fillStyle(0x3a3a48, 1);
   g.fillRoundedRect(cx - w / 2 + 2, cy - h + 2, w - 4, h - 6, (w - 4) * 0.45);
-  // engraved cross
-  g.fillStyle(0x12121c, 0.55);
-  g.fillRect(cx - 1.5, cy - h * 0.75, 3, h * 0.35);
-  g.fillRect(cx - 6, cy - h * 0.6, 12, 3);
+  g.fillStyle(0x5a5a6a, 0.5);
+  g.fillRoundedRect(cx - w / 2 + 3, cy - h + 3, w - 9, (h - 6) * 0.4, (w - 4) * 0.45);
+  // engraved cross with shadow
+  g.fillStyle(0x000000, 0.7);
+  g.fillRect(cx - 1.5, cy - h * 0.78, 3, h * 0.32);
+  g.fillRect(cx - 7, cy - h * 0.6, 14, 3);
+  // weathered cracks
+  g.lineStyle(1, 0x000000, 0.55);
+  g.beginPath(); g.moveTo(cx - w * 0.35, cy - h * 0.35); g.lineTo(cx - w * 0.2, cy - 2); g.strokePath();
+  g.beginPath(); g.moveTo(cx + w * 0.3, cy - h * 0.6); g.lineTo(cx + w * 0.4, cy - h * 0.2); g.strokePath();
+  // moss patch (sometimes)
+  if ((v & 0x20) === 0) {
+    g.fillStyle(0x2a4a2a, 0.7);
+    g.fillEllipse(cx - w * 0.3, cy - 2, 6, 3);
+  }
+}
+
+function drawSarcophagus(g, cx, cy, v) {
+  const w = 36 + (v & 0x07);
+  const h = 18 + ((v >> 2) & 0x07);
+  // shadow
+  g.fillStyle(0x000000, 0.55);
+  g.fillEllipse(cx, cy + 8, w * 1.1, 7);
+  // base (dark)
+  g.fillStyle(0x0e0e15, 1);
+  g.fillRect(cx - w / 2, cy - h, w, h);
+  // top stone slab (lifted slightly off-center, suggests opened tomb)
+  g.fillStyle(0x3a3a48, 1);
+  g.fillRect(cx - w / 2 + 2, cy - h - 4, w - 4, 6);
+  g.fillStyle(0x5a5a6a, 0.7);
+  g.fillRect(cx - w / 2 + 3, cy - h - 3, w - 6, 2);
+  // body face
+  g.fillStyle(0x2a2a35, 1);
+  g.fillRect(cx - w / 2 + 1, cy - h + 1, w - 2, h - 2);
+  // engravings
+  g.lineStyle(1, 0x121218, 0.85);
+  g.strokeRect(cx - w / 2 + 4, cy - h + 4, w - 8, h - 8);
+  g.fillStyle(0x121218, 0.75);
+  // skull engraving
+  g.fillCircle(cx, cy - h * 0.5 - 1, 4);
+  g.fillStyle(0x3a3a48, 1);
+  g.fillCircle(cx - 1.5, cy - h * 0.5 - 1.5, 1);
+  g.fillCircle(cx + 1.5, cy - h * 0.5 - 1.5, 1);
+  // crack on the side
+  g.lineStyle(1, 0x000000, 0.6);
+  g.beginPath(); g.moveTo(cx + w * 0.2, cy - h + 2); g.lineTo(cx + w * 0.3, cy - 4); g.strokePath();
+}
+
+function drawWitherFlowers(g, cx, cy, v) {
+  // shadow
+  g.fillStyle(0x000000, 0.3); g.fillEllipse(cx, cy + 3, 14, 4);
+  // 3-4 stems
+  const flowers = 3 + (v & 0x01);
+  g.lineStyle(1.5, 0x3a3a18, 0.85);
+  const positions = [];
+  for (let i = 0; i < flowers; i++) {
+    const ox = ((i - (flowers - 1) / 2) * 5) + ((v >> i) & 0x03);
+    const stemH = 9 + ((v >> i) & 0x05);
+    positions.push({ ox, stemH });
+    g.beginPath();
+    g.moveTo(cx + ox, cy);
+    g.lineTo(cx + ox + ((v >> (i + 2)) & 0x03) - 1.5, cy - stemH);
+    g.strokePath();
+  }
+  // flower heads (wilted purple/grey)
+  for (const p of positions) {
+    const headX = cx + p.ox;
+    const headY = cy - p.stemH;
+    g.fillStyle(0x5a3a5a, 0.85);
+    g.fillCircle(headX, headY, 3);
+    g.fillStyle(0x8a5a8a, 0.7);
+    g.fillCircle(headX - 1, headY - 1, 1.5);
+    // drooping petals
+    g.fillStyle(0x4a2a4a, 0.7);
+    g.fillCircle(headX - 2, headY + 1, 1.4);
+    g.fillCircle(headX + 2, headY + 1, 1.4);
+  }
+  // small leaves
+  g.fillStyle(0x4a4a18, 0.75);
+  g.fillEllipse(cx - 4, cy - 4, 2.5, 1.4);
+  g.fillEllipse(cx + 5, cy - 5, 2.5, 1.4);
 }
 
 function drawDeadTree(g, cx, cy, v) {
-  const trunkH = 38 + (v & 0x0f);
+  const trunkH = 42 + (v & 0x0f);
   // shadow
-  g.fillStyle(0x000000, 0.35);
-  g.fillEllipse(cx, cy + 4, 18, 5);
-  // trunk
-  g.fillStyle(0x1f1208, 0.7);
-  g.fillRect(cx - 2.5, cy - trunkH, 5, trunkH);
-  // branches
-  g.lineStyle(2, 0x2a1810, 0.7);
+  g.fillStyle(0x000000, 0.45);
+  g.fillEllipse(cx, cy + 4, 22, 6);
+  // roots at base
+  g.fillStyle(0x1f1208, 0.85);
+  g.fillTriangle(cx - 8, cy + 2, cx, cy - 4, cx - 4, cy + 4);
+  g.fillTriangle(cx + 8, cy + 2, cx, cy - 4, cx + 4, cy + 4);
+  // trunk with bark texture
+  g.fillStyle(0x1f1208, 1);
+  g.fillRect(cx - 3, cy - trunkH, 6, trunkH);
+  g.fillStyle(0x3a2410, 0.85);
+  g.fillRect(cx - 1.5, cy - trunkH, 3, trunkH);
+  // bark cracks
+  g.lineStyle(1, 0x0a0604, 0.85);
+  for (let i = 0; i < 4; i++) {
+    const ty = cy - 5 - i * (trunkH / 4) + ((v >> i) & 0x07);
+    g.beginPath();
+    g.moveTo(cx - 2, ty);
+    g.lineTo(cx + 2, ty - 4);
+    g.strokePath();
+  }
+  // branches with multiple sub-branches
+  const branchSets = [
+    { from: 0.5, dx1: -16, dy1: -0.4, dx2: -22, dy2: -0.3 },
+    { from: 0.65, dx1: 18, dy1: -0.5, dx2: 26, dy2: -0.25 },
+    { from: 0.85, dx1: -10, dy1: -0.25, dx2: -16, dy2: 0 },
+    { from: 0.95, dx1: 13, dy1: -0.2, dx2: 19, dy2: 0.05 },
+  ];
+  g.lineStyle(2.5, 0x1a0e04, 1);
+  for (const b of branchSets) {
+    const baseY = cy - trunkH * b.from;
+    const midX = cx + b.dx1;
+    const midY = baseY + trunkH * b.dy1;
+    const endX = cx + b.dx2;
+    const endY = baseY + trunkH * b.dy2;
+    g.beginPath();
+    g.moveTo(cx, baseY);
+    g.lineTo(midX, midY);
+    g.lineTo(endX, endY);
+    g.strokePath();
+    // small twig
+    g.lineStyle(1.5, 0x2a1810, 1);
+    g.beginPath();
+    g.moveTo(midX, midY);
+    g.lineTo(midX + (b.dx1 > 0 ? 6 : -6), midY - 4);
+    g.strokePath();
+    g.lineStyle(2.5, 0x1a0e04, 1);
+  }
+  // small claws at top
+  g.lineStyle(1.5, 0x1a0e04, 1);
   g.beginPath();
-  g.moveTo(cx, cy - trunkH * 0.5);
-  g.lineTo(cx - 14, cy - trunkH * 0.85);
-  g.lineTo(cx - 18, cy - trunkH * 0.7);
+  g.moveTo(cx, cy - trunkH);
+  g.lineTo(cx - 6, cy - trunkH - 5);
   g.strokePath();
   g.beginPath();
-  g.moveTo(cx, cy - trunkH * 0.65);
-  g.lineTo(cx + 16, cy - trunkH * 0.95);
-  g.lineTo(cx + 22, cy - trunkH * 0.75);
+  g.moveTo(cx, cy - trunkH);
+  g.lineTo(cx + 7, cy - trunkH - 6);
   g.strokePath();
-  g.beginPath();
-  g.moveTo(cx, cy - trunkH * 0.85);
-  g.lineTo(cx - 8, cy - trunkH * 1.1);
-  g.strokePath();
-  g.beginPath();
-  g.moveTo(cx, cy - trunkH * 0.95);
-  g.lineTo(cx + 10, cy - trunkH * 1.15);
-  g.strokePath();
+  // crow on a branch (sometimes)
+  if ((v & 0x40) === 0) {
+    const cbx = cx + branchSets[1].dx2 - 2;
+    const cby = cy - trunkH * 0.65 + trunkH * branchSets[1].dy2 - 2;
+    g.fillStyle(0x000000, 1);
+    g.fillEllipse(cbx, cby, 5, 4);
+    g.fillCircle(cbx + 1, cby - 3, 2);
+    g.fillStyle(0xffaa00, 1);
+    g.fillTriangle(cbx + 2.5, cby - 3.5, cbx + 5, cby - 3, cbx + 2.5, cby - 2.5);
+    g.fillStyle(0xff0000, 1);
+    g.fillCircle(cbx + 2, cby - 3.5, 0.6);
+  }
 }
 
 function drawStones(g, cx, cy, v) {
@@ -207,12 +625,25 @@ function drawStones(g, cx, cy, v) {
     const r = 8 + ((v >> i) & 0x07);
     const sx = cx + Math.cos(a) * 14;
     const sy = cy + Math.sin(a) * 7;
-    g.fillStyle(0x000000, 0.35);
+    g.fillStyle(0x000000, 0.45);
     g.fillEllipse(sx, sy + 2, r + 2, r * 0.4);
-    g.fillStyle(0x2a2a35, 0.6);
+    // dark side
+    g.fillStyle(0x1a1a25, 1);
     g.fillEllipse(sx, sy, r, r * 0.55);
-    g.fillStyle(0x4a4a5a, 0.5);
-    g.fillEllipse(sx - r * 0.15, sy - r * 0.1, r * 0.55, r * 0.3);
+    // mid
+    g.fillStyle(0x3a3a48, 1);
+    g.fillEllipse(sx - r * 0.1, sy - r * 0.05, r * 0.85, r * 0.45);
+    // light face / highlight
+    g.fillStyle(0x6a6a78, 0.85);
+    g.fillEllipse(sx - r * 0.2, sy - r * 0.1, r * 0.55, r * 0.25);
+    // crack
+    if (i === 0) {
+      g.lineStyle(1, 0x0a0a14, 0.7);
+      g.beginPath();
+      g.moveTo(sx - r * 0.4, sy);
+      g.lineTo(sx + r * 0.3, sy + 2);
+      g.strokePath();
+    }
   }
 }
 
@@ -697,6 +1128,7 @@ export default class GameScene extends Phaser.Scene {
       reviveLeft: p.metaReviveLeft || 0,
       endless: this.endless ? (this.endlessTier || 1) : 0,
       runGold: this.runGold || 0,
+      damageStats: { ...(this.damageStats || {}) },
       players: playersInfo,
       stats: {
         speed: p.speed,

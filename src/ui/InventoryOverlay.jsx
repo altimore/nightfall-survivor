@@ -26,6 +26,8 @@ export default function InventoryOverlay({ hud, onClose }) {
   const skills = Object.entries(hud.skills || {});
   const buffs = Object.entries(hud.buffs || {}).filter(([, v]) => v > 0);
   const stats = hud.stats || {};
+  const damageStats = Object.entries(hud.damageStats || {}).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a);
+  const totalDmg = damageStats.reduce((s, [, v]) => s + v, 0);
 
   return (
     <div style={{
@@ -86,6 +88,43 @@ export default function InventoryOverlay({ hud, onClose }) {
             />
           )}
         </Section>
+
+        <Section title="⚔ COMBAT" color="#ff8844">
+          <Stat label="☠ Kills" value={hud.kills || 0} color="#ffe066"/>
+          {hud.runGold > 0 && <Stat label="💰 Or" value={hud.runGold} color="#ffd966"/>}
+          {hud.dps > 0 && <Stat label="⚡ DPS" value={hud.dps} color="#ffe066"/>}
+          {hud.combo > 0 && <Stat label="🔥 Combo" value={`×${hud.combo}`} color="#ff4400"/>}
+          {totalDmg > 0 && <Stat label="📊 Dégâts totaux" value={Math.round(totalDmg).toLocaleString()} color="#ff8844"/>}
+        </Section>
+
+        {damageStats.length > 0 && (
+          <Section title="⚔ DÉGÂTS PAR ARME" color="#ff8844">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3em', gridColumn: '1 / -1' }}>
+              {damageStats.slice(0, 8).map(([id, dmg]) => {
+                const sk = SKILLS[id];
+                const name = sk ? t(`skills.${id}`) : id;
+                const col = sk?.color || '#c77dff';
+                const pct = totalDmg > 0 ? (dmg / totalDmg) * 100 : 0;
+                return (
+                  <div key={id} style={{ display: 'flex', alignItems: 'center', gap: '0.5em', fontSize: '0.85em' }}>
+                    <span style={{ width: '1.4em', textAlign: 'center', fontSize: '1em' }}>{sk?.icon || '⚔'}</span>
+                    <span style={{ width: '7em', color: col, letterSpacing: 1 }}>{name}</span>
+                    <div style={{ flex: 1, height: '0.55em', background: '#0a0020', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${pct}%`,
+                        background: `linear-gradient(90deg, ${col}88, ${col})`,
+                        borderRadius: 3,
+                      }}/>
+                    </div>
+                    <span style={{ width: '4.5em', textAlign: 'right', color: '#d8b8f0' }}>{Math.round(dmg).toLocaleString()}</span>
+                    <span style={{ width: '3em', textAlign: 'right', color: `${col}aa`, fontSize: '0.8em' }}>{pct.toFixed(0)}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
+        )}
 
         {skills.length > 0 && (
           <Section title={t('hud.powers')} color="#c77dff">

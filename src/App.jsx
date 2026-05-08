@@ -252,8 +252,9 @@ export default function App() {
       )}
       {phase === 'playing' && (
         <div style={{
-          position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 10px)', right: 12,
-          zIndex: 12, display: 'flex', gap: 8, pointerEvents: 'auto',
+          position: 'absolute', top: 'calc(env(safe-area-inset-bottom, 0px) + 14px)', left: 14,
+          zIndex: 12, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'auto',
+          bottom: 14, top: 'auto',
         }}>
           <button
             onClick={() => { bus.emit('pause:set', true); setPhase('paused'); }}
@@ -261,11 +262,12 @@ export default function App() {
             tabIndex={-1}
             aria-label="Pause"
             style={{
-              padding: '0.4em 0.7em',
-              background: 'rgba(8,0,22,0.78)',
-              border: '1px solid #c77dff66', color: '#e0aaff',
-              fontSize: '1.2em', cursor: 'pointer', borderRadius: 6,
+              padding: '0.5em 0.8em',
+              background: 'rgba(8,0,22,0.85)',
+              border: '1px solid #c77dff88', color: '#e0aaff',
+              fontSize: '1.3em', cursor: 'pointer', borderRadius: 8,
               touchAction: 'manipulation',
+              boxShadow: '0 0 14px rgba(199,125,255,0.25)',
             }}>⏸</button>
           <button
             onClick={() => { bus.emit('pause:set', true); setPhase('inventory'); }}
@@ -273,11 +275,12 @@ export default function App() {
             tabIndex={-1}
             aria-label="Inventaire"
             style={{
-              padding: '0.4em 0.7em',
-              background: 'rgba(8,0,22,0.78)',
-              border: '1px solid #c77dff66', color: '#e0aaff',
-              fontSize: '1.2em', cursor: 'pointer', borderRadius: 6,
+              padding: '0.5em 0.8em',
+              background: 'rgba(8,0,22,0.85)',
+              border: '1px solid #c77dff88', color: '#e0aaff',
+              fontSize: '1.3em', cursor: 'pointer', borderRadius: 8,
               touchAction: 'manipulation',
+              boxShadow: '0 0 14px rgba(199,125,255,0.25)',
             }}>🎒</button>
         </div>
       )}
