@@ -129,7 +129,7 @@ export const BIOME_LIST = Object.keys(BIOMES);
 // ════════════════════════════════════════
 // Game modes — global modifiers applied at scene start
 // ════════════════════════════════════════
-export const MODES = ['normal', 'horde', 'bossRush', 'oneShot'];
+export const MODES = ['normal', 'horde', 'bossRush', 'oneShot', 'sandbox'];
 
 // Wave schedule
 export const WAVES = [

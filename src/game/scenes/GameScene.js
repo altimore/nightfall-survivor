@@ -27,6 +27,227 @@ const BOSS_NAMES = [
 // Background decoration drawers — cemetery / haunted ruins style.
 // Each takes the bg Graphics and draws once around (cx, cy).
 // ────────────────────────────────────────
+// ────────── Biome floor textures (rendered only in visible viewport for perf) ──────────
+function drawBiomeFloor(g, biomeId, t, sx, sy, ex, ey, biome) {
+  if (biomeId === 'forest') return drawFloorForest(g, t, sx, sy, ex, ey);
+  if (biomeId === 'dungeon') return drawFloorDungeon(g, t, sx, sy, ex, ey);
+  if (biomeId === 'abyss') return drawFloorAbyss(g, t, sx, sy, ex, ey);
+  return drawFloorCemetery(g, t, sx, sy, ex, ey);
+}
+
+function drawFloorForest(g, t, sx, sy, ex, ey) {
+  // Earth + grass tufts + fallen leaves
+  const TILE = 64;
+  const x0 = Math.floor(sx / TILE) * TILE;
+  const y0 = Math.floor(sy / TILE) * TILE;
+  for (let x = x0; x < ex; x += TILE) {
+    for (let y = y0; y < ey; y += TILE) {
+      let h = ((x | 0) * 73856093) ^ ((y | 0) * 19349663);
+      h = (h ^ (h >>> 13)) * 1274126177;
+      h = h ^ (h >>> 16);
+      const r = ((h >>> 0) % 1000) / 1000;
+      // base earth tone (variable)
+      g.fillStyle(0x142a14 + ((h >>> 4) & 0x040404), 0.85);
+      g.fillRect(x, y, TILE, TILE);
+      // moss patch (60% chance)
+      if (r < 0.6) {
+        g.fillStyle(0x1f4a22, 0.55);
+        g.fillEllipse(x + TILE / 2 + ((h >>> 8) & 0x0f) - 8, y + TILE / 2 + ((h >>> 12) & 0x0f) - 8, 22, 14);
+      }
+      // grass tufts (small lines)
+      if (r > 0.3) {
+        g.lineStyle(1, 0x3a6a2a, 0.7);
+        for (let i = 0; i < 3; i++) {
+          const tx = x + ((h >>> (i * 4)) & 0x3f);
+          const ty = y + ((h >>> (i * 4 + 16)) & 0x3f);
+          g.beginPath(); g.moveTo(tx, ty); g.lineTo(tx, ty - 3); g.strokePath();
+        }
+      }
+      // fallen leaves (small dots)
+      if (r > 0.7) {
+        g.fillStyle(0x6a3a1a, 0.7);
+        g.fillCircle(x + ((h >>> 20) & 0x3f), y + ((h >>> 24) & 0x3f), 1.5);
+      }
+    }
+  }
+}
+
+function drawFloorDungeon(g, t, sx, sy, ex, ey) {
+  // Stone tile floor with mortar joints + cracks
+  const TILE = 56;
+  const x0 = Math.floor(sx / TILE) * TILE;
+  const y0 = Math.floor(sy / TILE) * TILE;
+  for (let x = x0; x < ex; x += TILE) {
+    for (let y = y0; y < ey; y += TILE) {
+      let h = ((x | 0) * 73856093) ^ ((y | 0) * 19349663);
+      h = (h ^ (h >>> 13)) * 1274126177;
+      h = h ^ (h >>> 16);
+      const variant = (h >>> 16) & 0x07;
+      // tile base
+      const tone = 0x2a2218 + variant * 0x040404;
+      g.fillStyle(tone, 0.95);
+      g.fillRect(x + 1, y + 1, TILE - 2, TILE - 2);
+      // light highlight on top-left
+      g.fillStyle(0x4a3a28, 0.45);
+      g.fillRect(x + 2, y + 2, TILE - 8, 3);
+      g.fillRect(x + 2, y + 2, 3, TILE - 8);
+      // mortar joint
+      g.fillStyle(0x0a0604, 0.85);
+      g.fillRect(x, y, TILE, 1);
+      g.fillRect(x, y, 1, TILE);
+      // crack on some tiles
+      if ((h & 0x07) === 0) {
+        g.lineStyle(1, 0x0a0604, 0.6);
+        g.beginPath();
+        g.moveTo(x + ((h >>> 8) & 0x1f), y + ((h >>> 12) & 0x1f));
+        g.lineTo(x + ((h >>> 16) & 0x1f), y + ((h >>> 20) & 0x1f));
+        g.strokePath();
+      }
+    }
+  }
+}
+
+function drawFloorAbyss(g, t, sx, sy, ex, ey) {
+  // Cosmic void with twinkling stars + nebula swirls
+  // base dark fill
+  g.fillStyle(0x040414, 0.9);
+  g.fillRect(sx, sy, ex - sx, ey - sy);
+  // nebula swirl (subtle big blob)
+  const cw = ex - sx, ch = ey - sy;
+  g.fillStyle(0x2a1a5a, 0.18);
+  g.fillEllipse(sx + cw * 0.3, sy + ch * 0.3, cw * 0.5, ch * 0.4);
+  g.fillStyle(0x4a1a6a, 0.12);
+  g.fillEllipse(sx + cw * 0.7, sy + ch * 0.6, cw * 0.55, ch * 0.45);
+  // stars (deterministic per cell, twinkle via t)
+  const TILE = 48;
+  const x0 = Math.floor(sx / TILE) * TILE;
+  const y0 = Math.floor(sy / TILE) * TILE;
+  for (let x = x0; x < ex; x += TILE) {
+    for (let y = y0; y < ey; y += TILE) {
+      let h = ((x | 0) * 73856093) ^ ((y | 0) * 19349663);
+      h = (h ^ (h >>> 13)) * 1274126177;
+      h = h ^ (h >>> 16);
+      // star (1-3 per tile)
+      const count = 1 + ((h >>> 16) & 0x02);
+      for (let i = 0; i < count; i++) {
+        const tx = x + ((h >>> (i * 6)) & 0x2f);
+        const ty = y + ((h >>> (i * 6 + 16)) & 0x2f);
+        const phase = ((h >>> (i * 4)) & 0x0f) * 0.4;
+        const tw = 0.4 + 0.6 * (Math.sin(t * 1.5 + phase) * 0.5 + 0.5);
+        g.fillStyle(0xffffff, tw * 0.85);
+        g.fillCircle(tx, ty, 1 + ((h >>> i) & 0x01));
+      }
+    }
+  }
+}
+
+function drawFloorCemetery(g, t, sx, sy, ex, ey) {
+  // Dark soil + moss patches + dead grass
+  g.fillStyle(0x0a0014, 1);
+  g.fillRect(sx, sy, ex - sx, ey - sy);
+  const TILE = 60;
+  const x0 = Math.floor(sx / TILE) * TILE;
+  const y0 = Math.floor(sy / TILE) * TILE;
+  for (let x = x0; x < ex; x += TILE) {
+    for (let y = y0; y < ey; y += TILE) {
+      let h = ((x | 0) * 73856093) ^ ((y | 0) * 19349663);
+      h = (h ^ (h >>> 13)) * 1274126177;
+      h = h ^ (h >>> 16);
+      const r = ((h >>> 0) % 1000) / 1000;
+      // soil patch (variable darkness)
+      g.fillStyle(0x14101c + ((h >>> 4) & 0x040404), 0.55);
+      g.fillEllipse(x + TILE / 2 + ((h >>> 8) & 0x0f) - 8, y + TILE / 2, TILE * 0.85, TILE * 0.45);
+      // dead grass tufts
+      if (r > 0.3) {
+        g.lineStyle(1, 0x3a2a18, 0.5);
+        for (let i = 0; i < 2; i++) {
+          const tx = x + ((h >>> (i * 8)) & 0x3f);
+          const ty = y + ((h >>> (i * 8 + 16)) & 0x3f);
+          g.beginPath(); g.moveTo(tx, ty); g.lineTo(tx + 1, ty - 4); g.strokePath();
+        }
+      }
+      // crack lines
+      if ((h & 0x0f) === 0) {
+        g.lineStyle(1, 0x000000, 0.4);
+        g.beginPath();
+        g.moveTo(x + ((h >>> 12) & 0x1f), y + ((h >>> 16) & 0x1f));
+        g.lineTo(x + ((h >>> 20) & 0x3f), y + ((h >>> 24) & 0x1f));
+        g.strokePath();
+      }
+    }
+  }
+}
+
+// ────────── Animated ambient particles per biome ──────────
+// Particles drawn in viewport space (screen-fixed) but with a slow drift.
+function drawAmbientParticles(g, biomeId, t, scrollX, scrollY, vw, vh) {
+  if (biomeId === 'forest') {
+    // Falling leaves spiraling down
+    g.fillStyle(0xffaa44, 0.7);
+    for (let i = 0; i < 14; i++) {
+      const sp = i * 1.7;
+      const x = ((Math.sin(t * 0.4 + sp) * 0.5 + 0.5) * vw + ((t * 30 + i * 60) % vw)) % vw + scrollX;
+      const y = ((t * 20 + i * 40) % (vh + 20)) - 10 + scrollY;
+      g.fillCircle(x, y, 1.6);
+    }
+    // Fireflies
+    g.fillStyle(0xc8ff66, 0.85);
+    for (let i = 0; i < 6; i++) {
+      const phase = i * 1.1;
+      const x = scrollX + (vw * 0.5) + Math.cos(t * 0.7 + phase) * vw * 0.45;
+      const y = scrollY + (vh * 0.5) + Math.sin(t * 0.5 + phase * 1.3) * vh * 0.4;
+      const tw = 0.5 + 0.5 * Math.sin(t * 3 + phase * 5);
+      g.fillCircle(x, y, 1.5);
+      g.fillStyle(0xc8ff66, tw * 0.4);
+      g.fillCircle(x, y, 4);
+      g.fillStyle(0xc8ff66, 0.85);
+    }
+  } else if (biomeId === 'dungeon') {
+    // Floating embers and ash
+    g.fillStyle(0xff8844, 0.85);
+    for (let i = 0; i < 18; i++) {
+      const sp = i * 0.7;
+      const x = scrollX + ((Math.sin(t * 0.3 + sp) * 0.5 + 0.5) * vw + i * 70) % vw;
+      const y = scrollY + (vh - ((t * 25 + i * 50) % (vh + 30)));
+      const tw = 0.4 + 0.6 * (Math.sin(t * 4 + sp) * 0.5 + 0.5);
+      g.fillCircle(x, y, 1.2);
+      g.fillStyle(0xffaa44, tw * 0.3);
+      g.fillCircle(x, y, 3);
+      g.fillStyle(0xff8844, 0.85);
+    }
+  } else if (biomeId === 'abyss') {
+    // Drifting bright stars + occasional shooting star
+    for (let i = 0; i < 10; i++) {
+      const phase = i * 0.9;
+      const x = scrollX + (vw * 0.5) + Math.cos(t * 0.2 + phase) * vw * 0.5;
+      const y = scrollY + (vh * 0.5) + Math.sin(t * 0.18 + phase * 1.4) * vh * 0.45;
+      const tw = 0.3 + 0.7 * Math.sin(t * 2 + phase * 3);
+      g.fillStyle(0xa090ff, tw * 0.85);
+      g.fillCircle(x, y, 1.4);
+    }
+    // Shooting star (slow horizontal streak)
+    const ssX = (t * 80) % (vw + 200) - 100;
+    const ssY = scrollY + ((Math.sin(t * 0.05) * 0.5 + 0.5) * vh * 0.6 + vh * 0.1);
+    g.lineStyle(2, 0xffffff, 0.85);
+    g.beginPath();
+    g.moveTo(scrollX + ssX, ssY);
+    g.lineTo(scrollX + ssX - 30, ssY + 3);
+    g.strokePath();
+  } else {
+    // Cemetery: drifting wisps / souls
+    for (let i = 0; i < 9; i++) {
+      const phase = i * 0.83;
+      const x = scrollX + (vw * 0.5) + Math.cos(t * 0.25 + phase) * vw * 0.45;
+      const y = scrollY + (vh * 0.5) + Math.sin(t * 0.18 + phase * 1.3) * vh * 0.4;
+      const tw = 0.2 + 0.6 * Math.sin(t * 1.5 + phase);
+      g.fillStyle(0xc8aaff, tw * 0.45);
+      g.fillCircle(x, y, 4);
+      g.fillStyle(0xe8d8ff, tw * 0.85);
+      g.fillCircle(x, y, 1.5);
+    }
+  }
+}
+
 function drawDecor(g, cx, cy, type, hash, biomeId) {
   const variant = (hash >>> 16) & 0xff;
   const sub = (hash >>> 24) & 0x07;
@@ -1524,7 +1745,7 @@ export default class GameScene extends Phaser.Scene {
       proj.x += proj.dx * dt;
       proj.y += proj.dy * dt;
       proj.life -= dt;
-      if (proj.life <= 0 || proj.x < -60 || proj.x > this.W + 60 || proj.y < -60 || proj.y > this.H + 60) {
+      if (proj.life <= 0 || proj.x < -60 || proj.x > this.WORLD_W + 60 || proj.y < -60 || proj.y > this.WORLD_H + 60) {
         proj.alive = false;
         continue;
       }
@@ -1662,7 +1883,8 @@ export default class GameScene extends Phaser.Scene {
           if (p && p.id != null) p.kills = (p.kills || 0) + 1;
           playSfx(e.type === 'boss' ? 'boss' : 'death');
           const xpRushMul = (this.buffs?.xpRush || 0) > 0 ? 2 : 1;
-          const value = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM * (p.metaXpMul || 1) * xpRushMul);
+          const sandboxMul = this.mode === 'sandbox' ? 100 : 1;
+          const value = Math.ceil((e.xpVal + this.elapsed / 10) * p.xpM * (p.metaXpMul || 1) * xpRushMul * sandboxMul);
           this.orbs.push(new XpOrb(this, e.x, e.y, value));
           // Gold drop scales with enemy difficulty (× goldRush buff if active)
           const goldRushMul = (this.buffs?.goldRush || 0) > 0 ? 2 : 1;
@@ -2699,8 +2921,8 @@ export default class GameScene extends Phaser.Scene {
       b.x += vx * dt;
       b.y += vy * dt;
       b.life -= dt;
-      // Bounds: kill off-screen
-      if (b.x < -40 || b.x > this.W + 40 || b.y < -40 || b.y > this.H + 40) {
+      // Bounds: kill off-world (use world dims, not viewport)
+      if (b.x < -40 || b.x > this.WORLD_W + 40 || b.y < -40 || b.y > this.WORLD_H + 40) {
         b.alive = false;
       }
       if (b.life <= 0) b.alive = false;
@@ -4283,10 +4505,22 @@ export default class GameScene extends Phaser.Scene {
     const biome = this.biome || BIOMES.cemetery;
     const WW = this.WORLD_W, WH = this.WORLD_H;
 
-    // Hex grid — biome-themed colour
-    g.lineStyle(1, biome.gridColor, 0.10);
-    for (let x = 0; x < WW + 80; x += 80) {
-      for (let y = 0; y < WH + 70; y += 70) {
+    // Compute the visible viewport in world coords for cheap rendering.
+    const cam = this.cameras.main;
+    const sx = Math.max(0, cam.scrollX - 60);
+    const sy = Math.max(0, cam.scrollY - 60);
+    const ex = Math.min(WW, cam.scrollX + this.W + 60);
+    const ey = Math.min(WH, cam.scrollY + this.H + 60);
+
+    // Biome-specific floor texture (only the visible region for perf)
+    drawBiomeFloor(g, this.biomeId, t, sx, sy, ex, ey, biome);
+
+    // Hex grid overlay — subtle, biome-themed colour (visible region only)
+    g.lineStyle(1, biome.gridColor, 0.08);
+    const hexX0 = Math.floor(sx / 80) * 80;
+    const hexY0 = Math.floor(sy / 70) * 70;
+    for (let x = hexX0; x < ex + 80; x += 80) {
+      for (let y = hexY0; y < ey + 70; y += 70) {
         g.beginPath();
         for (let i = 0; i < 6; i++) {
           const a = Math.PI / 3 * i - Math.PI / 6;
@@ -4315,6 +4549,8 @@ export default class GameScene extends Phaser.Scene {
       g.fillCircle(fx, fy, 200);
     }
 
+    // Animated ambient particles per biome
+    drawAmbientParticles(g, this.biomeId, t, cam.scrollX, cam.scrollY, this.W, this.H);
   }
 
   drawOrbits(p) {
