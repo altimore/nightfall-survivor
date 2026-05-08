@@ -203,6 +203,48 @@ const MUSIC_VARIANTS = {
     bassVol: 0.44,
     padVol: 0.07,
   },
+  // Biome themes — same skeleton as 'normal' with adjusted bass / chords / wave
+  // for distinct moods : forest pastoral, dungeon menacing, abyss ethereal, cemetery somber.
+  forest: {
+    bpm: 88,
+    bassSeq: [49, 55, 49, 52, 49, 55, 52, 49],
+    padChords: [[110,131,164],[123,147,175],[98,116,147],[110,131,165]],
+    bassWave: 'triangle',
+    kick: false,
+    snareVol: 0.10,
+    bassVol: 0.32,
+    padVol: 0.10,
+  },
+  dungeon: {
+    bpm: 92,
+    bassSeq: [44, 44, 41, 49, 44, 41, 39, 44],
+    padChords: [[87,104,131],[82,98,123],[78,93,116],[87,104,131]],
+    bassWave: 'sawtooth',
+    kick: true,
+    snareVol: 0.16,
+    bassVol: 0.40,
+    padVol: 0.08,
+  },
+  abyss: {
+    bpm: 78,
+    bassSeq: [39, 39, 41, 39, 44, 39, 41, 44],
+    padChords: [[78,98,123,147],[73,93,116,138],[82,104,131,156],[78,98,123,147]],
+    bassWave: 'sine',
+    kick: false,
+    snareVol: 0,
+    bassVol: 0.30,
+    padVol: 0.16,
+  },
+  cemetery: {
+    bpm: 84,
+    bassSeq: [49, 49, 41, 44, 49, 41, 44, 49],
+    padChords: [[98,116,147],[87,104,131],[93,110,138],[98,116,147]],
+    bassWave: 'triangle',
+    kick: false,
+    snareVol: 0.10,
+    bassVol: 0.34,
+    padVol: 0.09,
+  },
 };
 
 export function startMusic(variant = 'normal') {

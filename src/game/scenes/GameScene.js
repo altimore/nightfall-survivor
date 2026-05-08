@@ -1008,7 +1008,7 @@ export default class GameScene extends Phaser.Scene {
     this.offPause   = bus.on('pause:set', v => {
       this.paused = !!v;
       if (this.paused) stopMusic();
-      else if (!this.over) startMusic(this.bossMusicOn ? 'boss' : 'normal');
+      else if (!this.over) startMusic(this.bossMusicOn ? 'boss' : (this.biomeId || 'normal'));
     });
 
     // Initial obstacles scattered on the map
@@ -1043,7 +1043,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     initAudio();
-    startMusic();
+    startMusic(this.biomeId || 'normal');
 
     this.events.on('shutdown', () => {
       this.offRestart?.();
@@ -1556,7 +1556,7 @@ export default class GameScene extends Phaser.Scene {
       startMusic('boss');
     } else if (!hasBoss && this.bossMusicOn) {
       this.bossMusicOn = false;
-      startMusic('normal');
+      startMusic(this.biomeId || 'normal');
     }
 
     // ── Combo decay
@@ -3726,7 +3726,7 @@ export default class GameScene extends Phaser.Scene {
     try { refreshStats(p); } catch (e) { console.error('refreshStats error:', e); }
     this.pendingLevelupPlayer = null;
     this.paused = false;
-    if (!this.over) startMusic(this.bossMusicOn ? 'boss' : 'normal');
+    if (!this.over) startMusic(this.bossMusicOn ? 'boss' : (this.biomeId || 'normal'));
     this.emitHud();
   }
 
